@@ -164,6 +164,7 @@ typedef struct TaskTracker
 	int32 currentTaskIndex;
 	bool connectionBusy;
 	TrackerTaskState *connectionBusyOnTask;
+	List *connectionBusyOnTaskList;
 } TaskTracker;
 
 
