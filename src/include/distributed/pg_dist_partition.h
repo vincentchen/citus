@@ -52,6 +52,7 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
 #define DISTRIBUTE_BY_APPEND 'a'
 #define DISTRIBUTE_BY_HASH 'h'
 #define DISTRIBUTE_BY_RANGE 'r'
+#define DISTRIBUTE_BY_ALL 'l'
 #define REDISTRIBUTE_BY_HASH 'x'
 
 /* valid values for repmodel are 'c' for coordinator and 's' for streaming */
