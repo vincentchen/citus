@@ -1518,11 +1518,17 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
  * that in the context of distributed join and query planning, the callers of
  * this function *must* set the partition key column's range table reference
  * (varno) to match the table's location in the query range table list.
+ *
+ * Note that reference tables do not have partition column. Thus, this function
+ * should never be called for reference tables.
  */
 Var *
 PartitionKey(Oid relationId)
 {
 	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
+
+	/* we should never be calling this function for reference tables */
+	Assert(partitionEntry->partitionMethod != DISTRIBUTE_BY_ALL);
 
 	/* now obtain partition key and build the var node */
 	Node *variableNode = stringToNode(partitionEntry->partitionKeyString);
