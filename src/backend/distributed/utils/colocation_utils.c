@@ -34,6 +34,8 @@ static void MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId);
 static void ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId);
 static bool ShardsIntervalsEqual(ShardInterval *leftShardInterval,
 								 ShardInterval *rightShardInterval);
+static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
+											 ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
@@ -91,21 +93,43 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	Var *targetDistributionColumn = NULL;
 	Oid sourceDistributionColumnType = InvalidOid;
 	Oid targetDistributionColumnType = InvalidOid;
+	char sourcePartitionMethod = PartitionMethod(sourceRelationId);
+	char targetPartitionMethod = PartitionMethod(targetRelationId);
+	char *sourceRelationName = get_rel_name(sourceRelationId);
+	char *targetRelationName = get_rel_name(targetRelationId);
 
-	CheckHashPartitionedTable(sourceRelationId);
-	CheckHashPartitionedTable(targetRelationId);
+	if (sourcePartitionMethod != targetPartitionMethod)
+	{
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, targetRelationName),
+						errdetail("Distribution methods types don't match for "
+								  "%s and %s.", sourceRelationName,
+								  targetRelationName)));
+	}
 
-	sourceDistributionColumn = PartitionKey(sourceRelationId);
-	sourceDistributionColumnType = sourceDistributionColumn->vartype;
+	if (sourcePartitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		sourceDistributionColumnType = InvalidOid;
+		targetDistributionColumnType = InvalidOid;
+	}
+	else if (sourcePartitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		sourceDistributionColumn = PartitionKey(sourceRelationId);
+		sourceDistributionColumnType = sourceDistributionColumn->vartype;
 
-	targetDistributionColumn = PartitionKey(targetRelationId);
-	targetDistributionColumnType = targetDistributionColumn->vartype;
+		targetDistributionColumn = PartitionKey(targetRelationId);
+		targetDistributionColumnType = targetDistributionColumn->vartype;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, targetRelationName),
+						errdetail("Co-location is only supported for hash "
+								  "distributed and reference tables")));
+	}
 
 	if (sourceDistributionColumnType != targetDistributionColumnType)
 	{
-		char *sourceRelationName = get_rel_name(sourceRelationId);
-		char *targetRelationName = get_rel_name(targetRelationId);
-
 		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
 							   sourceRelationName, targetRelationName),
 						errdetail("Distribution column types don't match for "
@@ -277,7 +301,40 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 
 
 /*
- * ShardsIntervalsEqual checks if two shard intervals of hash distributed
+ * TODO: update comment
+ */
+static bool
+ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
+{
+
+	char leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
+	char rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
+
+	if (leftIntervalPartitionMethod != rightIntervalPartitionMethod)
+	{
+		return false;
+	}
+
+	if (leftIntervalPartitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		return HashPartitionedShardIntervalsEqual(leftShardInterval, rightShardInterval);
+	}
+	else if (leftIntervalPartitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		/*
+		 * Reference tables has only a single shard and all reference tables
+		 * are always co-located with each other.
+		 */
+
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * HashPartitionedShardIntervalsEqual checks if two shard intervals of hash distributed
  * tables are equal. Note that, this function doesn't work with non-hash
  * partitioned table's shards.
  *
@@ -286,7 +343,8 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
  * but do index check, but we avoid it because this way it is more cheaper.
  */
 static bool
-ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
+HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
+								   ShardInterval *rightShardInterval)
 {
 	int32 leftShardMinValue = DatumGetInt32(leftShardInterval->minValue);
 	int32 leftShardMaxValue = DatumGetInt32(leftShardInterval->maxValue);
@@ -540,10 +598,11 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
-	 * If distribution type of the table is not hash, each shard of the table is only
-	 * co-located with itself.
+	 * If distribution type of the table is not hash or all, each shard of
+	 * the table is only co-located with itself.
 	 */
-	if (partitionMethod != DISTRIBUTE_BY_HASH)
+	if (!((partitionMethod == DISTRIBUTE_BY_HASH) ||
+		  (partitionMethod == DISTRIBUTE_BY_ALL)))
 	{
 		colocatedShardList = lappend(colocatedShardList, shardInterval);
 		return colocatedShardList;

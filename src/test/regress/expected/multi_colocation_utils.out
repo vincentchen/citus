@@ -232,7 +232,7 @@ SELECT shards_colocated(1300016, 1300016);
 SELECT shards_colocated(1300020, 1300020);
  shards_colocated 
 ------------------
- t
+ f
 (1 row)
 
 -- check shard co-location with same co-location group
@@ -544,7 +544,7 @@ SELECT * FROM pg_dist_colocation
             3 |          2 |                 2 |                     25
             4 |          4 |                 2 |                     23
             5 |          2 |                 2 |                     23
-            6 |          1 |                 2 |                     23
+            6 |          1 |                 2 |                      0
 (5 rows)
 
 -- cross check with internal colocation API
@@ -653,10 +653,10 @@ ORDER BY
  schema_collocation.table4_groupe | 1300052 | t            |    57637 | -2147483648   | -1
  schema_collocation.table4_groupe | 1300053 | t            |    57637 | 0             | 2147483647
  schema_collocation.table4_groupe | 1300053 | t            |    57638 | 0             | 2147483647
- table1_groupf                    | 1300054 | t            |    57637 | -2147483648   | 2147483647
- table1_groupf                    | 1300054 | t            |    57638 | -2147483648   | 2147483647
- table2_groupf                    | 1300055 | t            |    57638 | -2147483648   | 2147483647
- table2_groupf                    | 1300055 | t            |    57637 | -2147483648   | 2147483647
+ table1_groupf                    | 1300054 | t            |    57637 |               | 
+ table1_groupf                    | 1300054 | t            |    57638 |               | 
+ table2_groupf                    | 1300055 | t            |    57637 |               | 
+ table2_groupf                    | 1300055 | t            |    57638 |               | 
 (56 rows)
 
 -- reset colocation ids to test mark_tables_colocated
@@ -692,7 +692,7 @@ ERROR:  cannot colocate tables table1_groupb and table1_groupe
 DETAIL:  Shard 1300026 of table1_groupb and shard 1300046 of table1_groupe have different number of shard placements.
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
 ERROR:  cannot colocate tables table1_groupb and table1_groupf
-DETAIL:  Shard counts don't match for table1_groupb and table1_groupf.
+DETAIL:  Distribution methods types don't match for table1_groupb and table1_groupf.
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_groupD']);
 ERROR:  cannot colocate tables table1_groupb and table1_groupd
 DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
@@ -759,7 +759,7 @@ SELECT * FROM pg_dist_colocation
             3 |          2 |                 2 |                     25
             4 |          4 |                 2 |                     23
             5 |          2 |                 2 |                     23
-            6 |          1 |                 2 |                     23
+            6 |          1 |                 2 |                      0
 (5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition

@@ -133,10 +133,12 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
 
 
 /*
- * FindShardIntervalIndex finds index of given shard in sorted shard interval array. For
- * this purpose, it calculates hash value of a number in its range(e.g. min value) and
- * finds which shard should contain the hashed value. Therefore this function only works
- * for hash distributed tables.
+ * FindShardIntervalIndex finds index of given shard in sorted shard interval array.
+ *
+ * For hash partitioned tables, it calculates hash value of a number in its
+ * range (e.g. min value) and finds which shard should contain the hashed
+ * value. For reference tables (i.e., all distributed), it simply returns 0.
+ * For distribution methods, the function errors out.
  */
 int
 FindShardIntervalIndex(ShardInterval *shardInterval)
@@ -148,6 +150,16 @@ FindShardIntervalIndex(ShardInterval *shardInterval)
 	int32 shardMinValue = 0;
 	uint64 hashTokenIncrement = 0;
 	int shardIndex = -1;
+
+	/* short-circuit for reference tables */
+	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		/* reference tables has only a single shard, so the index is fixed to 0 */
+		Assert(cacheEntry->shardIntervalArrayLength == 1);
+		shardIndex = 0;
+
+		return shardIndex;
+	}
 
 	/*
 	 * We can support it for other types of partitioned tables with simple binary scan
@@ -192,6 +204,9 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
 				  FmgrInfo *hashFunction, bool useBinarySearch)
 {
 	ShardInterval *shardInterval = NULL;
+
+	/* the function does not support reference tables yet */
+	AssertArg(partitionMethod != DISTRIBUTE_BY_ALL);
 
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{

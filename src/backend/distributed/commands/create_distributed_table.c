@@ -185,8 +185,9 @@ static void
 CreateReferenceTable(Oid relationId)
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
+	List *workerNodeList = WorkerNodeList();
 	int shardCount = 1;
-	int replicationFactor = 0;
+	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;
 	char *distributionColumnName = NULL;
 
