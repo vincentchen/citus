@@ -60,6 +60,7 @@
 
 
 /* local function forward declarations */
+static void CreateReferenceTable(Oid relationId);
 static void ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 									  char distributionMethod, uint32 colocationId);
 static char LookupDistributionMethod(Oid distributionMethodOid);
@@ -117,6 +118,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, INVALID_COLOCATION_ID);
 
+
+
 	PG_RETURN_VOID();
 }
 
@@ -168,22 +171,41 @@ Datum
 create_reference_table(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	int shardCount = 1;
-	AttrNumber firstColumnAttrNumber = 1;
 
-	char *firstColumnName = get_attname(relationId, firstColumnAttrNumber);
-	if (firstColumnName == NULL)
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("reference table candidate %s needs to have at"
-							   "least one column", relationName)));
-	}
-
-	CreateHashDistributedTable(relationId, firstColumnName, shardCount,
-							   ShardReplicationFactor);
+	CreateReferenceTable(relationId);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * TODO: add comment
+ */
+static void
+CreateReferenceTable(Oid relationId)
+{
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	int shardCount = 1;
+	int replicationFactor = 0;
+	Oid distributionColumnType = InvalidOid;
+	char *distributionColumnName = NULL;
+
+	/* check for existing colocations */
+	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		colocationId = CreateColocationGroup(shardCount, replicationFactor,
+											 distributionColumnType);
+	}
+
+	/* first, convert the relation into distributed relation */
+	ConvertToDistributedTable(relationId, distributionColumnName,
+							  DISTRIBUTE_BY_ALL, colocationId);
+
+	/* now, create the shards */
+	CreateReferenceTableShards(relationId);
+
+	return;
 }
 
 
@@ -258,8 +280,12 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 						errhint("Empty your table before distributing it.")));
 	}
 
-	distributionColumn = BuildDistributionKeyFromColumnName(relation,
-															distributionColumnName);
+	/* skip building distribution column for reference tables */
+	if (distributionMethod != DISTRIBUTE_BY_ALL)
+	{
+		distributionColumn = BuildDistributionKeyFromColumnName(relation,
+																distributionColumnName);
+	}
 
 	/* check for support function needed by specified partition method */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
@@ -315,6 +341,9 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
  * ErrorIfNotSupportedConstraint run checks related to unique index / exclude
  * constraints.
  *
+ * The function skips the uniqeness checks for reference tables (i.e., distribution
+ * method is 'all').
+ *
  * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned
  * tables, since currently there is no way of enforcing uniqueness for
  * overlapping shards.
@@ -330,9 +359,23 @@ static void
 ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 							  Var *distributionColumn, uint32 colocationId)
 {
-	char *relationName = RelationGetRelationName(relation);
-	List *indexOidList = RelationGetIndexList(relation);
+	char *relationName = NULL;
+	List *indexOidList = NULL;
 	ListCell *indexOidCell = NULL;
+
+	/*
+	 * Citus supports any kind of uniqueness constraints for reference tables
+	 * given that they only consist of a single shard and we can simply rely on
+	 * Postgres.
+	 * TODO: Handle Foreign keys separately..
+	 */
+	if (distributionMethod == DISTRIBUTE_BY_ALL)
+	{
+		return;
+	}
+
+	relationName = RelationGetRelationName(relation);
+	indexOidList = RelationGetIndexList(relation);
 
 	foreach(indexOidCell, indexOidList)
 	{
@@ -629,7 +672,13 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	/* open system catalog and insert new tuple */
 	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
 
-	distributionColumnString = nodeToString((Node *) distributionColumn);
+	/* do not need to create distribution column string for reference tables */
+	if (distributionColumn != NULL)
+	{
+		Assert (distributionMethod != DISTRIBUTE_BY_ALL);
+
+		distributionColumnString = nodeToString((Node *) distributionColumn);
+	}
 
 	/* form new tuple for pg_dist_partition */
 	memset(newValues, 0, sizeof(newValues));
@@ -639,10 +688,20 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		ObjectIdGetDatum(relationId);
 	newValues[Anum_pg_dist_partition_partmethod - 1] =
 		CharGetDatum(distributionMethod);
-	newValues[Anum_pg_dist_partition_partkey - 1] =
-		CStringGetTextDatum(distributionColumnString);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+
+	/* set partkey column to NULL for reference tables */
+	if (distributionMethod != DISTRIBUTE_BY_ALL)
+	{
+		newValues[Anum_pg_dist_partition_partkey - 1] =
+			CStringGetTextDatum(distributionColumnString);
+	}
+	else
+	{
+		newValues[Anum_pg_dist_partition_partkey - 1] = PointerGetDatum(NULL);
+		newNulls[Anum_pg_dist_partition_partkey - 1] = true;
+	}
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
 

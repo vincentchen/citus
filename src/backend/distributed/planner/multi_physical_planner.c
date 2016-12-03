@@ -2576,15 +2576,26 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 	ListCell *shardIntervalCell = NULL;
 	List *restrictInfoList = NIL;
 	Node *baseConstraint = NULL;
+	char partitionMethod = '\0';
+	Var *partitionColumn = NULL;
 
-	Var *partitionColumn = PartitionColumn(relationId, tableId);
-	char partitionMethod = PartitionMethod(relationId);
+	partitionMethod = PartitionMethod(relationId);
+	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		/* short circuit for reference tables */
+		Assert(list_length(shardIntervalList) == 1);
+
+		return shardIntervalList;
+	}
 
 	if (ContainsFalseClause(whereClauseList))
 	{
 		/* always return empty result if WHERE clause is of the form: false (AND ..) */
 		return NIL;
 	}
+
+	/* get the partition column */
+	partitionColumn = PartitionColumn(relationId, tableId);
 
 	/* build the filter clause list for the partition method */
 	if (partitionMethod == DISTRIBUTE_BY_HASH)

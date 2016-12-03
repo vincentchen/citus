@@ -121,6 +121,7 @@ static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree,
 												 RangeTblEntry *insertRte,
 												 RangeTblEntry *subqueryRte);
 static void ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query);
+static void ErrorIfNotAllParticipatingTablesAreReferenceTables(Query *query);
 static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query,
 														   RangeTblEntry *insertRte,
 														   RangeTblEntry *subqueryRte,
@@ -627,6 +628,8 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 {
 	Query *subquery = NULL;
 	Oid selectPartitionColumnTableId = InvalidOid;
+	Oid targetRelationId = insertRte->relid;
+	char targetPartitionMethod = PartitionMethod(targetRelationId);
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
@@ -646,9 +649,20 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 	/* we don't support LIMIT, OFFSET and WINDOW functions */
 	ErrorIfMultiTaskRouterSelectQueryUnsupported(subquery);
 
-	/* ensure that INSERT's partition column comes from SELECT's partition column */
-	ErrorIfInsertPartitionColumnDoesNotMatchSelect(queryTree, insertRte, subqueryRte,
-												   &selectPartitionColumnTableId);
+	/*
+	 * If we're inserting into a reference table, all participating tables
+	 * should be reference tables as well.
+	 */
+	if (targetPartitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		ErrorIfNotAllParticipatingTablesAreReferenceTables(queryTree);
+	}
+	else
+	{
+		/* ensure that INSERT's partition column comes from SELECT's partition column */
+		ErrorIfInsertPartitionColumnDoesNotMatchSelect(queryTree, insertRte, subqueryRte,
+													   &selectPartitionColumnTableId);
+	}
 
 	/* we expect partition column values come from colocated tables */
 	if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
@@ -755,6 +769,36 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 
 
 /*
+ * TODO: update comments
+ */
+static void
+ErrorIfNotAllParticipatingTablesAreReferenceTables(Query *query)
+{
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+
+	/* extract range table entries */
+	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		Oid relationId = rangeTableEntry->relid;
+		char partitionMethod = PartitionMethod(relationId);
+
+		if (partitionMethod != DISTRIBUTE_BY_ALL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("If data inserted into a reference table, "
+								   "all of the participating tables in the "
+								   "INSERT INTO ... SELECT query should be "
+								   "reference tables.")));
+		}
+	}
+}
+
+
+/*
  * ErrorIfInsertPartitionColumnDoesNotMatchSelect checks whether the INSERTed table's
  * partition column value matches with the any of the SELECTed table's partition column.
  *
@@ -793,6 +837,16 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 										  insertVar->varattno - 1);
 
 			if (!IsA(subqeryTargetEntry->expr, Var))
+			{
+				partitionColumnsMatch = false;
+				break;
+			}
+
+			/*
+			 * Reference tables doesn't have a partition column, thus partition columns
+			 * cannot match at all.
+			 */
+			if (PartitionMethod(subqeryTargetEntry->resorigtbl) == DISTRIBUTE_BY_ALL)
 			{
 				partitionColumnsMatch = false;
 				break;
@@ -954,7 +1008,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = NULL;
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	bool hasValuesScan = false;
@@ -964,6 +1018,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	List *onConflictSet = NIL;
 	Node *arbiterWhere = NULL;
 	Node *onConflictWhere = NULL;
+	char partitionMethod = PartitionMethod(distributedTableId);
 
 	CmdType commandType = queryTree->commandType;
 	Assert(commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -1074,6 +1129,16 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 								  "supported.")));
 	}
 
+	/* reference tables do not have partition column */
+	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		partitionColumn = NULL;
+	}
+	else
+	{
+		partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	}
+
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
@@ -1085,6 +1150,17 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			bool targetEntryPartitionColumn = false;
+
+			/* reference tables do not have partition column */
+			if (partitionColumn == NULL)
+			{
+				targetEntryPartitionColumn = false;
+			}
+			else if (targetEntry->resno == partitionColumn->varattno)
+			{
+				targetEntryPartitionColumn = true;
+			}
 
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
@@ -1100,15 +1176,14 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 									   "tables must not be VOLATILE")));
 			}
 
-			if (commandType == CMD_UPDATE &&
+			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
 				TargetEntryChangesValue(targetEntry, partitionColumn,
 										queryTree->jointree))
 			{
 				specifiesPartitionValue = true;
 			}
 
-			if (commandType == CMD_INSERT &&
-				targetEntry->resno == partitionColumn->varattno &&
+			if (commandType == CMD_INSERT && targetEntryPartitionColumn &&
 				!IsA(targetEntry->expr, Const))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1181,8 +1256,19 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	foreach(setTargetCell, onConflictSet)
 	{
 		TargetEntry *setTargetEntry = (TargetEntry *) lfirst(setTargetCell);
+		bool setTargetEntryPartitionColumn = false;
 
-		if (setTargetEntry->resno == partitionColumn->varattno)
+		/* reference tables do not have partition column */
+		if (partitionColumn == NULL)
+		{
+			setTargetEntryPartitionColumn = false;
+		}
+		else if (setTargetEntry->resno == partitionColumn->varattno)
+		{
+			setTargetEntryPartitionColumn = true;
+		}
+
+		if (setTargetEntryPartitionColumn)
 		{
 			Expr *setExpr = setTargetEntry->expr;
 			if (IsA(setExpr, Var) &&
@@ -2390,7 +2476,7 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 			Oid distributedTableId = rte->relid;
 			char partitionMethod = PartitionMethod(distributedTableId);
 
-			if (partitionMethod != DISTRIBUTE_BY_HASH)
+			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_ALL))
 			{
 				return false;
 			}

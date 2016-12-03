@@ -321,12 +321,12 @@ LookupDistTableCacheEntry(Oid relationId)
 		MemoryContext oldContext = NULL;
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 		bool isNull = false;
+		bool partitionKeyIsNull = false;
 
 		partitionKeyDatum = heap_getattr(distPartitionTuple,
 										 Anum_pg_dist_partition_partkey,
 										 tupleDescriptor,
-										 &isNull);
-		Assert(!isNull);
+										 &partitionKeyIsNull);
 
 		colocationId = heap_getattr(distPartitionTuple,
 									Anum_pg_dist_partition_colocationid, tupleDescriptor,
@@ -351,9 +351,14 @@ LookupDistTableCacheEntry(Oid relationId)
 		}
 
 		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
-		partitionKeyString = TextDatumGetCString(partitionKeyDatum);
 		partitionMethod = partitionForm->partmethod;
 		replicationModel = DatumGetChar(replicationModelDatum);
+
+		/* note that for reference tables isNull becomes true */
+		if(!partitionKeyIsNull)
+		{
+			partitionKeyString = TextDatumGetCString(partitionKeyDatum);
+		}
 
 		MemoryContextSwitchTo(oldContext);
 
@@ -405,7 +410,11 @@ LookupDistTableCacheEntry(Oid relationId)
 	}
 
 	/* decide and allocate interval comparison function */
-	if (shardIntervalArrayLength > 0)
+	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		shardIntervalCompareFunction = NULL;
+	}
+	else if (shardIntervalArrayLength > 0)
 	{
 		MemoryContext oldContext = CurrentMemoryContext;
 
@@ -418,14 +427,31 @@ LookupDistTableCacheEntry(Oid relationId)
 		MemoryContextSwitchTo(oldContext);
 	}
 
-	/* sort the interval array */
-	sortedShardIntervalArray = SortShardIntervalArray(shardIntervalArray,
-													  shardIntervalArrayLength,
-													  shardIntervalCompareFunction);
+	/* reference tables has a single shard which is not initialized */
+	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		hasUninitializedShardInterval = true;
 
-	/* check if there exists any shard intervals with no min/max values */
-	hasUninitializedShardInterval =
-		HasUninitializedShardInterval(sortedShardIntervalArray, shardIntervalArrayLength);
+		/*
+		 * Note that during create_reference_table() call,
+		 * the reference table do not have any shards.
+		 */
+		Assert(shardIntervalArrayLength <= 1);
+
+		/* since there is a zero or one shard, it is already sorted */
+		sortedShardIntervalArray = shardIntervalArray;
+	}
+	else
+	{
+		/* sort the interval array */
+		sortedShardIntervalArray = SortShardIntervalArray(shardIntervalArray,
+														  shardIntervalArrayLength,
+														  shardIntervalCompareFunction);
+
+		/* check if there exists any shard intervals with no min/max values */
+		hasUninitializedShardInterval =
+			HasUninitializedShardInterval(sortedShardIntervalArray, shardIntervalArrayLength);
+	}
 
 	/* we only need hash functions for hash distributed tables */
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
@@ -1460,8 +1486,11 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		cacheEntry->hasUninitializedShardInterval = false;
 		cacheEntry->hasUniformHashDistribution = false;
 
-		pfree(cacheEntry->shardIntervalCompareFunction);
-		cacheEntry->shardIntervalCompareFunction = NULL;
+		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_ALL)
+		{
+			pfree(cacheEntry->shardIntervalCompareFunction);
+			cacheEntry->shardIntervalCompareFunction = NULL;
+		}
 
 		/* we only allocated hash function for hash distributed tables */
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
@@ -1635,7 +1664,7 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 	currentPartitionTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(currentPartitionTuple))
 	{
-		Assert(!HeapTupleHasNulls(currentPartitionTuple));
+		//Assert(!HeapTupleHasNulls(currentPartitionTuple));
 
 		distPartitionTuple = heap_copytuple(currentPartitionTuple);
 	}
@@ -1714,6 +1743,12 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 		case DISTRIBUTE_BY_HASH:
 		{
 			*intervalTypeId = INT4OID;
+			break;
+		}
+
+		case DISTRIBUTE_BY_ALL:
+		{
+			*intervalTypeId = InvalidOid;
 			break;
 		}
 

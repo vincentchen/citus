@@ -3366,11 +3366,20 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		Var *partitionColumn = PartitionKey(relationId);
+		char partitionMethod = PartitionMethod(relationId);
+		Var *partitionColumn = NULL;
 
-		if (candidateColumn->varattno == partitionColumn->varattno)
+		if (partitionMethod == DISTRIBUTE_BY_ALL)
 		{
-			isPartitionColumn = true;
+			isPartitionColumn = false;
+		}
+		else
+		{
+			partitionColumn = PartitionKey(relationId);
+			if (candidateColumn->varattno == partitionColumn->varattno)
+			{
+				isPartitionColumn = true;
+			}
 		}
 	}
 	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
