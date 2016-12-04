@@ -219,7 +219,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		char partitionMethod = PartitionMethod(relationId);
 
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-			DISTRIBUTE_BY_RANGE)
+			DISTRIBUTE_BY_RANGE || partitionMethod == DISTRIBUTE_BY_ALL)
 		{
 			CopyToExistingShards(copyStatement, completionTag);
 		}
@@ -384,7 +384,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	FmgrInfo *columnOutputFunctions = NULL;
 	uint64 processedRowCount = 0;
 
-	Var *partitionColumn = PartitionColumn(tableId, 0);
+	Var *partitionColumn = NULL;
 	char partitionMethod = PartitionMethod(tableId);
 
 	/* get hash function for partition column */
@@ -392,6 +392,12 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	/* get compare function for shard intervals */
 	compareFunction = cacheEntry->shardIntervalCompareFunction;
+
+	/* reference tables do not have partition column */
+	if (partitionMethod != DISTRIBUTE_BY_ALL)
+	{
+		partitionColumn = PartitionColumn(tableId, 0);
+	}
 
 	/* allocate column values and nulls arrays */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -422,8 +428,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		}
 	}
 
-	/* error if any shard missing min/max values */
-	if (cacheEntry->hasUninitializedShardInterval)
+	/* error if any shard missing min/max values for non reference tables */
+	if (partitionMethod != DISTRIBUTE_BY_ALL &&
+		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("could not start copy"),
@@ -515,22 +522,37 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 			CHECK_FOR_INTERRUPTS();
 
-			/* find the partition column value */
-
-			if (columnNulls[partitionColumn->varattno - 1])
+			/*
+			 * Find the partition column value and corresponding shard interval
+			 * for non-reference tables.
+			 * Get the existing (and only a single) shard interval for the reference
+			 * tables.
+			 */
+			if (partitionMethod != DISTRIBUTE_BY_ALL)
 			{
-				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-								errmsg("cannot copy row with NULL value "
-									   "in partition column")));
+				if (columnNulls[partitionColumn->varattno - 1])
+				{
+					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+									errmsg("cannot copy row with NULL value "
+										   "in partition column")));
+				}
+
+				partitionColumnValue = columnValues[partitionColumn->varattno - 1];
+
+				/* find the shard interval and id for the partition column value */
+				shardInterval = FindShardInterval(partitionColumnValue, shardIntervalCache,
+												  shardCount, partitionMethod,
+												  compareFunction, hashFunction,
+												  useBinarySearch);
+			}
+			else
+			{
+				/* reference tables always have a single shard */
+				Assert(list_length(shardIntervalList) == 1);
+
+				shardInterval = (ShardInterval *) linitial(shardIntervalList);
 			}
 
-			partitionColumnValue = columnValues[partitionColumn->varattno - 1];
-
-			/* find the shard interval and id for the partition column value */
-			shardInterval = FindShardInterval(partitionColumnValue, shardIntervalCache,
-											  shardCount, partitionMethod,
-											  compareFunction, hashFunction,
-											  useBinarySearch);
 			if (shardInterval == NULL)
 			{
 				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
