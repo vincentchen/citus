@@ -1701,6 +1701,7 @@ TargetShardIntervalForModify(Query *query)
 								"and try again.")));
 	}
 
+
 	fastShardPruningPossible = FastShardPruningPossible(query->commandType,
 														partitionMethod);
 	if (fastShardPruningPossible)
@@ -1718,9 +1719,22 @@ TargetShardIntervalForModify(Query *query)
 	}
 	else
 	{
-		List *restrictClauseList = QueryRestrictList(query);
+		List *restrictClauseList = NULL;
 		Index tableId = 1;
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
+
+		/*
+		 * Reference tables do not have the notion of partition column. Thus,
+		 * there are no restrictions on the partition column.
+		 */
+		 if (partitionMethod == DISTRIBUTE_BY_ALL)
+		 {
+			 restrictClauseList = NULL;
+		 }
+		 else
+		 {
+			 restrictClauseList = QueryRestrictList(query);
+		 }
 
 		prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
 										 shardIntervalList);
