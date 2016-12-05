@@ -579,3 +579,25 @@ COPY reference_table_test FROM STDIN WITH CSV;
 \.
 
 COPY reference_table_test TO STDOUT WITH CSV;
+
+-- INSERT INTO SELECT among reference tables
+DELETE FROM
+	reference_table_test_second;
+
+INSERT INTO
+	reference_table_test_second
+	SELECT
+		*
+	FROM
+		reference_table_test
+	RETURNING *;
+
+INSERT INTO
+	reference_table_test_second (value_2)
+	SELECT
+		reference_table_test.value_2
+	FROM
+		reference_table_test JOIN reference_table_test_second USING (value_1)
+	RETURNING *;
+
+
