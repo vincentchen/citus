@@ -31,6 +31,7 @@
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
+extern bool AllParticipatingTablesAreReferenceTables(Query *query);
 extern void AddUninstantiatedPartitionRestriction(Query *originalQuery);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
