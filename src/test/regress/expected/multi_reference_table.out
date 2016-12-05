@@ -882,3 +882,47 @@ RETURNING *;
       45 |      15 | 2       | Fri Dec 02 00:00:00 2016
 (5 rows)
 
+-- some tests with function evaluation and sequences
+CREATE TABLE reference_table_test_fifth (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_test_fifth');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE SEQUENCE example_ref_value_seq;
+-- see that sequences work as expected
+INSERT INTO
+	reference_table_test_fifth (value_2) VALUES (2)
+RETURNING value_1, value_2;
+ value_1 | value_2 
+---------+---------
+       1 |       2
+(1 row)
+
+INSERT INTO
+	reference_table_test_fifth (value_2) VALUES (2)
+RETURNING value_1, value_2;
+ value_1 | value_2 
+---------+---------
+       2 |       2
+(1 row)
+
+INSERT INTO
+	reference_table_test_fifth (value_2, value_3) VALUES (nextval('example_ref_value_seq'), nextval('example_ref_value_seq')::text)
+RETURNING value_1, value_2, value_3;
+ value_1 | value_2 | value_3 
+---------+---------+---------
+       3 |       1 | 2
+(1 row)
+
+UPDATE
+	reference_table_test_fifth SET value_4 = now()
+WHERE
+	value_1 = 1
+RETURNING value_1, value_2, value_4 > '2000-01-01';
+ value_1 | value_2 | ?column? 
+---------+---------+----------
+       1 |       2 | t
+(1 row)
+

@@ -534,3 +534,26 @@ RETURNING *;
 DELETE FROM
 	reference_table_test
 RETURNING *;
+
+-- some tests with function evaluation and sequences
+CREATE TABLE reference_table_test_fifth (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_test_fifth');
+CREATE SEQUENCE example_ref_value_seq;
+
+-- see that sequences work as expected
+INSERT INTO
+	reference_table_test_fifth (value_2) VALUES (2)
+RETURNING value_1, value_2;
+INSERT INTO
+	reference_table_test_fifth (value_2) VALUES (2)
+RETURNING value_1, value_2;
+
+INSERT INTO
+	reference_table_test_fifth (value_2, value_3) VALUES (nextval('example_ref_value_seq'), nextval('example_ref_value_seq')::text)
+RETURNING value_1, value_2, value_3;
+
+UPDATE
+	reference_table_test_fifth SET value_4 = now()
+WHERE
+	value_1 = 1
+RETURNING value_1, value_2, value_4 > '2000-01-01';
