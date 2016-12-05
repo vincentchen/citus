@@ -471,3 +471,34 @@ FROM
 							RIGHT JOIN reference_table_test_third t3 USING (value_1)
 ORDER BY
 	1;
+
+-- now, lets have some tests on UPSERTs and uniquness
+CREATE TABLE reference_table_test_fourth (value_1 int, value_2 float PRIMARY KEY, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_test_fourth');
+
+-- insert a row
+INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01');
+
+-- now get the unique key violation
+INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01');
+
+-- now get null constraint violation due to primary key
+INSERT INTO reference_table_test_fourth (value_1, value_3, value_4) VALUES (1, '1.0', '2016-12-01');
+
+-- lets run some upserts
+INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01') ON CONFLICT DO NOTHING RETURNING *;
+INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '10', '2016-12-01') ON CONFLICT (value_2) DO
+	UPDATE SET value_3 = EXCLUDED.value_3, value_2 = EXCLUDED.value_2
+	RETURNING *;
+-- update all columns
+INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '10', '2016-12-01') ON CONFLICT (value_2) DO
+	UPDATE SET value_3 = EXCLUDED.value_3 || '+10', value_2 = EXCLUDED.value_2 + 10, value_1 = EXCLUDED.value_1 + 10, value_4 = '2016-12-10'
+	RETURNING *;
+
+-- finally see that shard healths are OK
+SELECT
+	shardid, shardstate, nodename, nodeport
+FROM
+	pg_dist_shard_placement
+WHERE
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass);
