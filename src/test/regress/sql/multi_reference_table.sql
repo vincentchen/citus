@@ -353,4 +353,121 @@ CREATE TEMP TABLE temp_reference_test as
 	WHERE value_1 = 1;
 
 -- all kinds of joins are supported among reference tables
+-- first create two more tables
+CREATE TABLE reference_table_test_second (value_1 int, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_test_second');
 
+CREATE TABLE reference_table_test_third (value_1 int, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_test_third');
+
+-- ingest some data to both tables
+INSERT INTO reference_table_test_second VALUES (1, 1.0, '1', '2016-12-01');
+INSERT INTO reference_table_test_second VALUES (2, 2.0, '2', '2016-12-02');
+INSERT INTO reference_table_test_second VALUES (3, 3.0, '3', '2016-12-03');
+
+INSERT INTO reference_table_test_third VALUES (4, 4.0, '4', '2016-12-04');
+INSERT INTO reference_table_test_third VALUES (5, 5.0, '5', '2016-12-05');
+
+-- some very basic tests
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_second t2
+WHERE
+	t1.value_2 = t2.value_2
+ORDER BY
+	1;
+
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_third t3
+WHERE
+	t1.value_2 = t3.value_2
+ORDER BY
+	1;
+
+SELECT
+	DISTINCT t2.value_1
+FROM
+	reference_table_test_second t2, reference_table_test_third t3
+WHERE
+	t2.value_2 = t3.value_2
+ORDER BY
+	1;
+
+-- join on different columns and different data types via casts
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_second t2
+WHERE
+	t1.value_2 = t2.value_1
+ORDER BY
+	1;
+
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_second t2
+WHERE
+	t1.value_2 = t2.value_3::int
+ORDER BY
+	1;
+
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_second t2
+WHERE
+	t1.value_2 = date_part('day', t2.value_4)
+ORDER BY
+	1;
+
+-- ingest a common row to see more meaningful results with joins involving 3 tables
+INSERT INTO reference_table_test_third VALUES (3, 3.0, '3', '2016-12-03');
+
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_second t2, reference_table_test_third t3
+WHERE
+	t1.value_2 = date_part('day', t2.value_4) AND t3.value_2 = t1.value_2
+ORDER BY
+	1;
+
+-- same query on different columns
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1, reference_table_test_second t2, reference_table_test_third t3
+WHERE
+	t1.value_1 = date_part('day', t2.value_4) AND t3.value_2 = t1.value_1
+ORDER BY
+	1;
+
+-- with the JOIN syntax
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1 JOIN reference_table_test_second t2 USING (value_1)
+							JOIN reference_table_test_third t3 USING (value_1)
+ORDER BY
+	1;
+
+-- and left/right joins
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1 LEFT JOIN reference_table_test_second t2 USING (value_1)
+							LEFT JOIN reference_table_test_third t3 USING (value_1)
+ORDER BY
+	1;
+
+SELECT
+	DISTINCT t1.value_1
+FROM
+	reference_table_test t1 RIGHT JOIN reference_table_test_second t2 USING (value_1)
+							RIGHT JOIN reference_table_test_third t3 USING (value_1)
+ORDER BY
+	1;
