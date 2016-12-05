@@ -820,3 +820,65 @@ WHERE
  1250003 |          1 | localhost |    57638
 (2 rows)
 
+-- let's not run some update/delete queries on arbitrary columns
+DELETE FROM
+	reference_table_test
+WHERE
+	value_1 = 1
+RETURNING *;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       1 |       1 | 1       | Thu Dec 01 00:00:00 2016
+       1 |       1 | 1       | Thu Dec 01 00:00:00 2016
+(2 rows)
+
+DELETE FROM
+	reference_table_test
+WHERE
+	value_4 = '2016-12-05'
+RETURNING *;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       5 |       5 | 5       | Mon Dec 05 00:00:00 2016
+(1 row)
+
+UPDATE
+	reference_table_test
+SET
+	value_2 = 15
+WHERE
+	value_2 = 2
+RETURNING *;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       2 |      15 | 2       | Fri Dec 02 00:00:00 2016
+       2 |      15 | 2       | Fri Dec 02 00:00:00 2016
+(2 rows)
+
+-- and some queries without any filters
+UPDATE
+	reference_table_test
+SET
+	value_2 = 15, value_1 = 45
+RETURNING *;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+      45 |      15 | 3       | Sat Dec 03 00:00:00 2016
+      45 |      15 | 4       | Sun Dec 04 00:00:00 2016
+      45 |      15 | 3       | Sat Dec 03 00:00:00 2016
+      45 |      15 | 2       | Fri Dec 02 00:00:00 2016
+      45 |      15 | 2       | Fri Dec 02 00:00:00 2016
+(5 rows)
+
+DELETE FROM
+	reference_table_test
+RETURNING *;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+      45 |      15 | 3       | Sat Dec 03 00:00:00 2016
+      45 |      15 | 4       | Sun Dec 04 00:00:00 2016
+      45 |      15 | 3       | Sat Dec 03 00:00:00 2016
+      45 |      15 | 2       | Fri Dec 02 00:00:00 2016
+      45 |      15 | 2       | Fri Dec 02 00:00:00 2016
+(5 rows)
+

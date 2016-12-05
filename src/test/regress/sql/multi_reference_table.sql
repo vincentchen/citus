@@ -502,3 +502,35 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass);
+
+-- let's not run some update/delete queries on arbitrary columns
+DELETE FROM
+	reference_table_test
+WHERE
+	value_1 = 1
+RETURNING *;
+
+DELETE FROM
+	reference_table_test
+WHERE
+	value_4 = '2016-12-05'
+RETURNING *;
+
+UPDATE
+	reference_table_test
+SET
+	value_2 = 15
+WHERE
+	value_2 = 2
+RETURNING *;
+
+-- and some queries without any filters
+UPDATE
+	reference_table_test
+SET
+	value_2 = 15, value_1 = 45
+RETURNING *;
+
+DELETE FROM
+	reference_table_test
+RETURNING *;
