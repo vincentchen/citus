@@ -557,3 +557,25 @@ UPDATE
 WHERE
 	value_1 = 1
 RETURNING value_1, value_2, value_4 > '2000-01-01';
+
+
+-- test copying FROM / TO
+-- first delete all the data
+DELETE FROM
+	reference_table_test;
+
+COPY reference_table_test FROM STDIN WITH CSV;
+1,1.0,1,2016-01-01
+\.
+COPY reference_table_test (value_2, value_3, value_4) FROM STDIN WITH CSV;
+2.0,2,2016-01-02
+\.
+COPY reference_table_test (value_3) FROM STDIN WITH CSV;
+3
+\.
+
+COPY reference_table_test FROM STDIN WITH CSV;
+,,,
+\.
+
+COPY reference_table_test TO STDOUT WITH CSV;

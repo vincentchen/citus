@@ -926,3 +926,16 @@ RETURNING value_1, value_2, value_4 > '2000-01-01';
        1 |       2 | t
 (1 row)
 
+-- test copying FROM / TO
+-- first delete all the data
+DELETE FROM
+	reference_table_test;
+COPY reference_table_test FROM STDIN WITH CSV;
+COPY reference_table_test (value_2, value_3, value_4) FROM STDIN WITH CSV;
+COPY reference_table_test (value_3) FROM STDIN WITH CSV;
+COPY reference_table_test FROM STDIN WITH CSV;
+COPY reference_table_test TO STDOUT WITH CSV;
+1,1,1,Fri Jan 01 00:00:00 2016
+,2,2,Sat Jan 02 00:00:00 2016
+,,3,
+,,,
