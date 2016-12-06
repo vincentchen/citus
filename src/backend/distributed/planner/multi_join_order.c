@@ -1520,7 +1520,7 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
  * (varno) to match the table's location in the query range table list.
  *
  * Note that reference tables do not have partition column. Thus, this function
- * should never be called for reference tables.
+ * returns NULL when called for reference tables.
  */
 Var *
 PartitionKey(Oid relationId)
@@ -1528,7 +1528,10 @@ PartitionKey(Oid relationId)
 	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
 
 	/* we should never be calling this function for reference tables */
-	Assert(partitionEntry->partitionMethod != DISTRIBUTE_BY_ALL);
+	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		return NULL;
+	}
 
 	/* now obtain partition key and build the var node */
 	Node *variableNode = stringToNode(partitionEntry->partitionKeyString);
