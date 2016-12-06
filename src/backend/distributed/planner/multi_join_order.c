@@ -1163,9 +1163,18 @@ BroadcastJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	 * existing (left) table to have single shard, full outer join requires both tables
 	 * to have single shard.
 	 */
-	if (joinType == JOIN_INNER && candidateShardCount < LargeTableShardCount)
+	if (joinType == JOIN_INNER)
 	{
-		performBroadcastJoin = true;
+		ShardInterval *initialCandidateShardInterval =
+				(ShardInterval *) linitial(candidateShardList);
+		char candidatePartitionMethod =
+				PartitionMethod(initialCandidateShardInterval->relationId);
+
+		if (candidatePartitionMethod == DISTRIBUTE_BY_ALL ||
+			candidateShardCount < LargeTableShardCount)
+		{
+			performBroadcastJoin = true;
+		}
 	}
 	else if ((joinType == JOIN_LEFT || joinType == JOIN_ANTI) && candidateShardCount == 1)
 	{

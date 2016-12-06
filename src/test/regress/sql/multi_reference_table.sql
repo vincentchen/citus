@@ -601,3 +601,78 @@ INSERT INTO
 	RETURNING *;
 
 
+SET citus.shard_count TO 6;
+SET citus.shard_replication_factor TO 2;
+
+CREATE TABLE colocated_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_distributed_table('colocated_table_test', 'value_1');
+
+CREATE TABLE colocated_table_test_2 (value_1 int, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_distributed_table('colocated_table_test_2', 'value_1');
+
+DELETE FROM reference_table_test;
+INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+
+INSERT INTO colocated_table_test VALUES (1, 1.0, '1', '2016-12-01');
+INSERT INTO colocated_table_test VALUES (2, 2.0, '2', '2016-12-02');
+
+INSERT INTO colocated_table_test_2 VALUES (1, 1.0, '1', '2016-12-01');
+INSERT INTO colocated_table_test_2 VALUES (2, 2.0, '2', '2016-12-02');
+
+
+SET client_min_messages TO DEBUG1;
+SET citus.log_multi_join_order TO TRUE;
+
+SELECT 
+	reference_table_test.value_1
+FROM 
+	reference_table_test, colocated_table_test
+WHERE 
+	colocated_table_test.value_1 = reference_table_test.value_1;
+
+SELECT 
+	colocated_table_test.value_2
+FROM 
+	reference_table_test, colocated_table_test 
+WHERE 
+	colocated_table_test.value_2 = reference_table_test.value_2;
+
+SELECT 
+	colocated_table_test.value_3
+FROM 
+	colocated_table_test, reference_table_test
+WHERE 
+	reference_table_test.value_1 = colocated_table_test.value_1;
+
+SELECT 
+	colocated_table_test.value_2 
+FROM 
+	reference_table_test, colocated_table_test, colocated_table_test_2
+WHERE 
+	colocated_table_test.value_2 = reference_table_test.value_2;
+
+SELECT 
+	colocated_table_test.value_2 
+FROM 
+	reference_table_test, colocated_table_test, colocated_table_test_2
+WHERE 
+	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
+
+SET citus.task_executor_type to "task-tracker";
+SELECT 
+	colocated_table_test.value_2 
+FROM 
+	reference_table_test, colocated_table_test, colocated_table_test_2
+WHERE 
+	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2;
+
+SELECT 
+	reference_table_test.value_2 
+FROM 
+	reference_table_test, colocated_table_test, colocated_table_test_2
+WHERE 
+	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1;
+
+SET citus.shard_count TO DEFAULT;
+SET citus.task_executor_type to "real-time";
