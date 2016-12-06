@@ -1166,9 +1166,9 @@ BroadcastJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	if (joinType == JOIN_INNER)
 	{
 		ShardInterval *initialCandidateShardInterval =
-				(ShardInterval *) linitial(candidateShardList);
+			(ShardInterval *) linitial(candidateShardList);
 		char candidatePartitionMethod =
-				PartitionMethod(initialCandidateShardInterval->relationId);
+			PartitionMethod(initialCandidateShardInterval->relationId);
 
 		if (candidatePartitionMethod == DISTRIBUTE_BY_ALL ||
 			candidateShardCount < LargeTableShardCount)
@@ -1228,7 +1228,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	/* joins involving reference tables should not proceed until here */
-	Assert (candidatePartitionMethod != DISTRIBUTE_BY_ALL);
+	Assert(candidatePartitionMethod != DISTRIBUTE_BY_ALL);
 	candidatePartitionColumn = PartitionColumn(relationId, tableId);
 
 	joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
