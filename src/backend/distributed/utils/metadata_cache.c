@@ -355,7 +355,7 @@ LookupDistTableCacheEntry(Oid relationId)
 		replicationModel = DatumGetChar(replicationModelDatum);
 
 		/* note that for reference tables isNull becomes true */
-		if(!partitionKeyIsNull)
+		if (!partitionKeyIsNull)
 		{
 			partitionKeyString = TextDatumGetCString(partitionKeyDatum);
 		}
@@ -450,7 +450,8 @@ LookupDistTableCacheEntry(Oid relationId)
 
 		/* check if there exists any shard intervals with no min/max values */
 		hasUninitializedShardInterval =
-			HasUninitializedShardInterval(sortedShardIntervalArray, shardIntervalArrayLength);
+			HasUninitializedShardInterval(sortedShardIntervalArray,
+										  shardIntervalArrayLength);
 	}
 
 	/* we only need hash functions for hash distributed tables */
@@ -1664,7 +1665,7 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 	currentPartitionTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(currentPartitionTuple))
 	{
-		//Assert(!HeapTupleHasNulls(currentPartitionTuple));
+		/* Assert(!HeapTupleHasNulls(currentPartitionTuple)); */
 
 		distPartitionTuple = heap_copytuple(currentPartitionTuple);
 	}

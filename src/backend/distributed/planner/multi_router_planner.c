@@ -794,10 +794,10 @@ ErrorIfNotAllParticipatingTablesAreReferenceTables(Query *query)
 	if (!AllParticipatingTablesAreReferenceTables(query))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("If data inserted into a reference table, "
-								   "all of the participating tables in the "
-								   "INSERT INTO ... SELECT query should be "
-								   "reference tables.")));
+						errmsg("If data inserted into a reference table, "
+							   "all of the participating tables in the "
+							   "INSERT INTO ... SELECT query should be "
+							   "reference tables.")));
 	}
 }
 
@@ -808,7 +808,6 @@ ErrorIfNotAllParticipatingTablesAreReferenceTables(Query *query)
 bool
 AllParticipatingTablesAreReferenceTables(Query *query)
 {
-
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 
@@ -1785,14 +1784,14 @@ TargetShardIntervalForModify(Query *query)
 		 * Reference tables do not have the notion of partition column. Thus,
 		 * there are no restrictions on the partition column.
 		 */
-		 if (partitionMethod == DISTRIBUTE_BY_ALL)
-		 {
-			 restrictClauseList = NULL;
-		 }
-		 else
-		 {
-			 restrictClauseList = QueryRestrictList(query);
-		 }
+		if (partitionMethod == DISTRIBUTE_BY_ALL)
+		{
+			restrictClauseList = NULL;
+		}
+		else
+		{
+			restrictClauseList = QueryRestrictList(query);
+		}
 
 		prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
 										 shardIntervalList);
@@ -2548,7 +2547,8 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 			Oid distributedTableId = rte->relid;
 			char partitionMethod = PartitionMethod(distributedTableId);
 
-			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_ALL))
+			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
+				  DISTRIBUTE_BY_ALL))
 			{
 				return false;
 			}

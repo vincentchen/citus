@@ -35,7 +35,7 @@ static void ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRela
 static bool ShardsIntervalsEqual(ShardInterval *leftShardInterval,
 								 ShardInterval *rightShardInterval);
 static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
-											 ShardInterval *rightShardInterval);
+											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
@@ -306,7 +306,6 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 static bool
 ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
 {
-
 	char leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
 	char rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
 

@@ -540,7 +540,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 				partitionColumnValue = columnValues[partitionColumn->varattno - 1];
 
 				/* find the shard interval and id for the partition column value */
-				shardInterval = FindShardInterval(partitionColumnValue, shardIntervalCache,
+				shardInterval = FindShardInterval(partitionColumnValue,
+												  shardIntervalCache,
 												  shardCount, partitionMethod,
 												  compareFunction, hashFunction,
 												  useBinarySearch);
