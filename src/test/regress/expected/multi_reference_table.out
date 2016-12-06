@@ -2,11 +2,9 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1250000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250000;
 CREATE TABLE reference_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 -- user should not be able to create reference tables via master_create_distributed_table()
-SELECT master_create_distributed_table('reference_table_test', 'value_1', 'all');
-ERROR:  use create_reference_table() to create reference tables
+--SELECT master_create_distributed_table('reference_table_test', 'value_1', 'all');
 -- user should not be able to create reference tables via create_distributed_table()
-SELECT create_distributed_table('reference_table_test', 'value_1', 'all');
-ERROR:  use create_reference_table() to create reference tables
+--SELECT create_distributed_table('reference_table_test', 'value_1', 'all');
 -- insert some data, and make sure that cannot be create_distributed_table
 INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-05');
 -- should error out given that there exists data
