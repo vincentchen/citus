@@ -654,6 +654,7 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 static List *
 JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClauseList)
 {
+	JoinOrderNode *firstJoinNode = NULL;
 	JoinOrderNode *currentJoinNode = NULL;
 	JoinRuleType firstJoinRule = JOIN_RULE_INVALID_FIRST;
 	List *joinOrderList = NIL;
@@ -664,12 +665,17 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 	/* create join node for the first table */
 	Oid firstRelationId = firstTable->relationId;
 	uint32 firstTableId = firstTable->rangeTableId;
-	Var *firstPartitionColumn = PartitionColumn(firstRelationId, firstTableId);
 	char firstPartitionMethod = PartitionMethod(firstRelationId);
+	Var *firstPartitionColumn = NULL;
 
-	JoinOrderNode *firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule,
-													 firstPartitionColumn,
-													 firstPartitionMethod);
+	/* we should never need partition column for reference tables */
+	if (firstPartitionMethod != DISTRIBUTE_BY_ALL)
+	{
+		firstPartitionColumn = PartitionColumn(firstRelationId, firstTableId);
+	}
+
+	firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule, firstPartitionColumn,
+									  firstPartitionMethod);
 
 	/* add first node to the join order */
 	joinOrderList = list_make1(firstJoinNode);
@@ -1200,7 +1206,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	JoinOrderNode *nextJoinNode = NULL;
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
-	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
+	Var *candidatePartitionColumn = NULL;
 	Var *currentPartitionColumn = currentJoinNode->partitionColumn;
 	char candidatePartitionMethod = PartitionMethod(relationId);
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
@@ -1211,6 +1217,10 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	{
 		return NULL;
 	}
+
+	/* joins involving reference tables should not proceed until here */
+	Assert (candidatePartitionMethod != DISTRIBUTE_BY_ALL);
+	candidatePartitionColumn = PartitionColumn(relationId, tableId);
 
 	joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
 										   candidatePartitionColumn,
@@ -1244,7 +1254,6 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
-	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 	char candidatePartitionMethod = PartitionMethod(relationId);
 
 	/* outer joins are not supported yet */
@@ -1276,8 +1285,10 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
-	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH)
+	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH &&
+		candidatePartitionMethod != DISTRIBUTE_BY_ALL)
 	{
+		Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 		OpExpr *joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
 													   applicableJoinClauses);
 
@@ -1526,6 +1537,8 @@ Var *
 PartitionKey(Oid relationId)
 {
 	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
+	Node *variableNode = NULL;
+	Var *partitionKey = NULL;
 
 	/* we should never be calling this function for reference tables */
 	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_ALL)
@@ -1534,9 +1547,9 @@ PartitionKey(Oid relationId)
 	}
 
 	/* now obtain partition key and build the var node */
-	Node *variableNode = stringToNode(partitionEntry->partitionKeyString);
+	variableNode = stringToNode(partitionEntry->partitionKeyString);
 
-	Var *partitionKey = (Var *) variableNode;
+	partitionKey = (Var *) variableNode;
 	Assert(IsA(variableNode, Var));
 
 	return partitionKey;

@@ -3488,8 +3488,18 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
 	if (rangeTableType == CITUS_RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
+		char partitionMethod = PartitionMethod(relationId);
+		Var *partitionColumn = NULL;
 
+		/* we should never need partition column for reference tables */
+		if (partitionMethod == DISTRIBUTE_BY_ALL)
+		{
+			partitionedOnColumn = false;
+
+			return partitionedOnColumn;
+		}
+
+		partitionColumn = PartitionColumn(relationId, rangeTableId);
 		if (partitionColumn->varattno == column->varattno)
 		{
 			partitionedOnColumn = true;

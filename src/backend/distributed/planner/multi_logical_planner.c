@@ -1034,13 +1034,20 @@ MultiTableNodeList(List *tableEntryList, List *rangeTableList)
 
 	foreach(tableEntryCell, tableEntryList)
 	{
+		MultiTable *tableNode = NULL;
 		TableEntry *tableEntry = (TableEntry *) lfirst(tableEntryCell);
 		Oid relationId = tableEntry->relationId;
 		uint32 rangeTableId = tableEntry->rangeTableId;
-		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
+		Var *partitionColumn = NULL;
 		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableId, rangeTableList);
 
-		MultiTable *tableNode = CitusMakeNode(MultiTable);
+		/* we should never need partition column for reference tables */
+		if (PartitionMethod(relationId) != DISTRIBUTE_BY_ALL)
+		{
+			partitionColumn = PartitionColumn(relationId, rangeTableId);
+		}
+
+		tableNode = CitusMakeNode(MultiTable);
 		tableNode->subquery = NULL;
 		tableNode->relationId = relationId;
 		tableNode->rangeTableId = rangeTableId;
