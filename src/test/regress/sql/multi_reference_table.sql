@@ -639,7 +639,7 @@ WHERE
 	colocated_table_test.value_2 = reference_table_test.value_2;
 
 SELECT 
-	colocated_table_test.value_3
+	colocated_table_test.value_2
 FROM 
 	colocated_table_test, reference_table_test
 WHERE 
