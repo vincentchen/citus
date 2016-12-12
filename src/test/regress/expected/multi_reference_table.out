@@ -29,7 +29,7 @@ WHERE
 	logicalrelid = 'reference_table_test'::regclass;
  partmethod | partkeyisnull | colocationid 
 ------------+---------------+--------------
- l          | t             |            3
+ l          | t             |            1
 (1 row)
 
 -- now see that shard min/max values are NULL

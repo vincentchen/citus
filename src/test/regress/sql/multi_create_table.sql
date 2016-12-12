@@ -72,7 +72,7 @@ SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
 
 TRUNCATE nation;
 
-SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
+SELECT create_reference_table('nation');
 
 CREATE TABLE part (
 	p_partkey integer not null,
@@ -96,4 +96,4 @@ CREATE TABLE supplier
 	s_acctbal decimal(15,2) not null,
 	s_comment varchar(101) not null
 );
-SELECT master_create_distributed_table('supplier', 's_suppkey', 'append');
+SELECT create_reference_table('supplier');
