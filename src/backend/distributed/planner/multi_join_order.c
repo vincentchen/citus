@@ -131,7 +131,8 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 		Oid relationId = rangeTableEntry->relationId;
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
-		if (cacheEntry->hasUninitializedShardInterval)
+		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_ALL &&
+			cacheEntry->hasUninitializedShardInterval)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot perform distributed planning on this query"),
@@ -1521,13 +1522,21 @@ RightColumn(OpExpr *joinClause)
 /*
  * PartitionColumn builds the partition column for the given relation, and sets
  * the partition column's range table references to the given table identifier.
+ *
+ * TODO: update comment
  */
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
 {
-	Var *partitionColumn = PartitionKey(relationId);
-	partitionColumn->varno = rangeTableId;
-	partitionColumn->varnoold = rangeTableId;
+	Var *partitionKey =  PartitionKey(relationId);
+	Var *partitionColumn = NULL;
+
+	if (partitionKey != NULL)
+	{
+		partitionColumn = partitionKey;
+		partitionColumn->varno = rangeTableId;
+		partitionColumn->varnoold = rangeTableId;
+	}
 
 	return partitionColumn;
 }
