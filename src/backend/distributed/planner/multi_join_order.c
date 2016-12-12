@@ -1528,7 +1528,7 @@ RightColumn(OpExpr *joinClause)
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
 {
-	Var *partitionKey =  PartitionKey(relationId);
+	Var *partitionKey = PartitionKey(relationId);
 	Var *partitionColumn = NULL;
 
 	if (partitionKey != NULL)
