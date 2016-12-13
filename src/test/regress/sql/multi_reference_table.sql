@@ -740,3 +740,51 @@ SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_te
 
 -- should work sliently
 SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);
+
+-- ensure that reference tables on
+-- different queries works as expected
+CREATE SCHEMA reference_schema;
+
+-- create with schema prefix
+CREATE TABLE reference_schema.reference_table_test_sixth (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_schema.reference_table_test_sixth');
+
+SET search_path TO 'reference_schema';
+
+-- create on the schema
+CREATE TABLE reference_table_test_seventh (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_test_seventh');
+
+-- ingest some data
+INSERT INTO reference_table_test_sixth VALUES (1, 1.0, '1', '2016-12-01');
+INSERT INTO reference_table_test_seventh VALUES (1, 1.0, '1', '2016-12-01');
+
+SET search_path TO 'public';
+
+-- ingest some data
+INSERT INTO reference_schema.reference_table_test_sixth VALUES (2, 2.0, '2', '2016-12-02');
+INSERT INTO reference_schema.reference_table_test_seventh VALUES (2, 2.0, '2', '2016-12-02');
+
+-- some basic queries
+SELECT
+	value_1
+FROM
+	reference_schema.reference_table_test_sixth;
+
+SET search_path TO 'reference_schema';
+SELECT
+	reference_table_test_sixth.value_1
+FROM
+	reference_table_test_sixth, reference_table_test_seventh
+WHERE
+	reference_table_test_sixth.value_4 = reference_table_test_seventh.value_4;
+
+-- last test with cross schemas
+SET search_path TO 'public';
+
+SELECT
+	reftable.value_2, colocated_table_test_2.value_1
+FROM
+	colocated_table_test_2, reference_schema.reference_table_test_sixth as reftable
+WHERE
+	colocated_table_test_2.value_4 = reftable.value_4;
