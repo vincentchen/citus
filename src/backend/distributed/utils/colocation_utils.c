@@ -337,6 +337,7 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 		return true;
 	}
 
+	/* append and range partitioned shard never co-located */
 	return false;
 }
 
