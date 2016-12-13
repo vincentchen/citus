@@ -205,9 +205,6 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
 {
 	ShardInterval *shardInterval = NULL;
 
-	/* the function does not support reference tables yet */
-	AssertArg(partitionMethod != DISTRIBUTE_BY_ALL);
-
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
 		int hashedValue = DatumGetInt32(FunctionCall1(hashFunction,
@@ -239,6 +236,14 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
 
 			shardInterval = shardIntervalCache[shardIndex];
 		}
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		int shardIndex = 0;
+
+		/* reference tables has a single shard, all values mapped to that shard */
+		Assert(shardCount == 1);
+		shardInterval = shardIntervalCache[shardIndex];
 	}
 	else
 	{

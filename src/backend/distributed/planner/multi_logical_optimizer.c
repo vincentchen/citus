@@ -3322,6 +3322,9 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
  *
  * Note that if the given expression is a field of a composite type, then this
  * function checks if this composite column is a partition column.
+ *
+ * Also, the function returns always false for reference tables given that reference
+ * tables do not have partition column.
  */
 bool
 IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
@@ -3366,20 +3369,16 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		char partitionMethod = PartitionMethod(relationId);
-		Var *partitionColumn = NULL;
+		Var *partitionColumn = PartitionKey(relationId);
 
-		if (partitionMethod == DISTRIBUTE_BY_ALL)
+		/* reference tables do not have partition column */
+		if (partitionColumn == NULL)
 		{
 			isPartitionColumn = false;
 		}
-		else
+		else if (candidateColumn->varattno == partitionColumn->varattno)
 		{
-			partitionColumn = PartitionKey(relationId);
-			if (candidateColumn->varattno == partitionColumn->varattno)
-			{
-				isPartitionColumn = true;
-			}
+			isPartitionColumn = true;
 		}
 	}
 	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)

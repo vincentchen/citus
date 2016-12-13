@@ -202,7 +202,7 @@ CreateReferenceTable(Oid relationId)
 	ConvertToDistributedTable(relationId, distributionColumnName,
 							  DISTRIBUTE_BY_ALL, colocationId);
 
-	/* now, create the shards */
+	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShards(relationId);
 }
 
@@ -279,11 +279,8 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 	}
 
 	/* skip building distribution column for reference tables */
-	if (distributionMethod != DISTRIBUTE_BY_ALL)
-	{
-		distributionColumn = BuildDistributionKeyFromColumnName(relation,
-																distributionColumnName);
-	}
+	distributionColumn = BuildDistributionKeyFromColumnName(relation,
+															distributionColumnName);
 
 	/* check for support function needed by specified partition method */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
@@ -365,7 +362,8 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 	 * Citus supports any kind of uniqueness constraints for reference tables
 	 * given that they only consist of a single shard and we can simply rely on
 	 * Postgres.
-	 * TODO: Handle Foreign keys separately..
+	 * TODO: Here we should be erroring out if there exists any foreign keys
+	 * from/to a reference table.
 	 */
 	if (distributionMethod == DISTRIBUTE_BY_ALL)
 	{
@@ -670,14 +668,6 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	/* open system catalog and insert new tuple */
 	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
 
-	/* do not need to create distribution column string for reference tables */
-	if (distributionColumn != NULL)
-	{
-		Assert(distributionMethod != DISTRIBUTE_BY_ALL);
-
-		distributionColumnString = nodeToString((Node *) distributionColumn);
-	}
-
 	/* form new tuple for pg_dist_partition */
 	memset(newValues, 0, sizeof(newValues));
 	memset(newNulls, false, sizeof(newNulls));
@@ -692,11 +682,16 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_ALL)
 	{
+		distributionColumnString = nodeToString((Node *) distributionColumn);
+
 		newValues[Anum_pg_dist_partition_partkey - 1] =
 			CStringGetTextDatum(distributionColumnString);
 	}
 	else
 	{
+		/* for reference tables no one should be passing a distribution column */
+		Assert(distributionColumn == NULL);
+
 		newValues[Anum_pg_dist_partition_partkey - 1] = PointerGetDatum(NULL);
 		newNulls[Anum_pg_dist_partition_partkey - 1] = true;
 	}

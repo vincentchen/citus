@@ -655,7 +655,6 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 static List *
 JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClauseList)
 {
-	JoinOrderNode *firstJoinNode = NULL;
 	JoinOrderNode *currentJoinNode = NULL;
 	JoinRuleType firstJoinRule = JOIN_RULE_INVALID_FIRST;
 	List *joinOrderList = NIL;
@@ -666,17 +665,12 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 	/* create join node for the first table */
 	Oid firstRelationId = firstTable->relationId;
 	uint32 firstTableId = firstTable->rangeTableId;
+	Var *firstPartitionColumn = PartitionColumn(firstRelationId, firstTableId);
 	char firstPartitionMethod = PartitionMethod(firstRelationId);
-	Var *firstPartitionColumn = NULL;
 
-	/* we should never need partition column for reference tables */
-	if (firstPartitionMethod != DISTRIBUTE_BY_ALL)
-	{
-		firstPartitionColumn = PartitionColumn(firstRelationId, firstTableId);
-	}
-
-	firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule, firstPartitionColumn,
-									  firstPartitionMethod);
+	JoinOrderNode *firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule,
+													 firstPartitionColumn,
+													 firstPartitionMethod);
 
 	/* add first node to the join order */
 	joinOrderList = list_make1(firstJoinNode);
@@ -1157,8 +1151,8 @@ BroadcastJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	/*
 	 * If the table's shard count doesn't exceed the value specified in the
-	 * configuration, then we assume table broadcasting is feasible. This assumption
-	 * is valid only for inner joins.
+	 * configuration or the table is a reference table, then we assume table
+	 * broadcasting is feasible. This assumption is valid only for inner joins.
 	 *
 	 * Left join requires candidate table to have single shard, right join requires
 	 * existing (left) table to have single shard, full outer join requires both tables
@@ -1222,7 +1216,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	JoinOrderNode *nextJoinNode = NULL;
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
-	Var *candidatePartitionColumn = NULL;
+	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 	Var *currentPartitionColumn = currentJoinNode->partitionColumn;
 	char candidatePartitionMethod = PartitionMethod(relationId);
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
@@ -1233,9 +1227,6 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	{
 		return NULL;
 	}
-
-	/* joins involving reference tables should not proceed until here */
-	candidatePartitionColumn = PartitionColumn(relationId, tableId);
 
 	joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
 										   candidatePartitionColumn,
@@ -1269,6 +1260,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
+	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 	char candidatePartitionMethod = PartitionMethod(relationId);
 
 	/* outer joins are not supported yet */
@@ -1303,7 +1295,6 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH &&
 		candidatePartitionMethod != DISTRIBUTE_BY_ALL)
 	{
-		Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 		OpExpr *joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
 													   applicableJoinClauses);
 
@@ -1528,7 +1519,8 @@ RightColumn(OpExpr *joinClause)
  * PartitionColumn builds the partition column for the given relation, and sets
  * the partition column's range table references to the given table identifier.
  *
- * TODO: update comment
+ * Note that reference tables do not have partition column. Thus, this function
+ * returns NULL when called for reference tables.
  */
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
@@ -1536,12 +1528,15 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 	Var *partitionKey = PartitionKey(relationId);
 	Var *partitionColumn = NULL;
 
-	if (partitionKey != NULL)
+	/* short circuit for reference tables */
+	if (partitionKey == NULL)
 	{
-		partitionColumn = partitionKey;
-		partitionColumn->varno = rangeTableId;
-		partitionColumn->varnoold = rangeTableId;
+		return partitionColumn;
 	}
+
+	partitionColumn = partitionKey;
+	partitionColumn->varno = rangeTableId;
+	partitionColumn->varnoold = rangeTableId;
 
 	return partitionColumn;
 }
@@ -1563,7 +1558,7 @@ PartitionKey(Oid relationId)
 	Node *variableNode = NULL;
 	Var *partitionKey = NULL;
 
-	/* we should never be calling this function for reference tables */
+	/* reference tables do not have partition column */
 	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_ALL)
 	{
 		return NULL;

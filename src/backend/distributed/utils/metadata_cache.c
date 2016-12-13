@@ -1487,7 +1487,7 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		cacheEntry->hasUninitializedShardInterval = false;
 		cacheEntry->hasUniformHashDistribution = false;
 
-		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_ALL)
+		if (cacheEntry->shardIntervalCompareFunction != NULL)
 		{
 			pfree(cacheEntry->shardIntervalCompareFunction);
 			cacheEntry->shardIntervalCompareFunction = NULL;
@@ -1665,8 +1665,6 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 	currentPartitionTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(currentPartitionTuple))
 	{
-		/* Assert(!HeapTupleHasNulls(currentPartitionTuple)); */
-
 		distPartitionTuple = heap_copytuple(currentPartitionTuple);
 	}
 

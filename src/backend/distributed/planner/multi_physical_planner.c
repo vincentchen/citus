@@ -2567,6 +2567,8 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 /*
  * PruneShardList prunes shard intervals from given list based on the selection criteria,
  * and returns remaining shard intervals in another list.
+ *
+ * For reference tables, the function simply returns the single shard that the table has.
  */
 List *
 PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
@@ -2576,13 +2578,13 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 	ListCell *shardIntervalCell = NULL;
 	List *restrictInfoList = NIL;
 	Node *baseConstraint = NULL;
-	char partitionMethod = '\0';
-	Var *partitionColumn = NULL;
 
-	partitionMethod = PartitionMethod(relationId);
+	Var *partitionColumn = PartitionColumn(relationId, tableId);
+	char partitionMethod = PartitionMethod(relationId);
+
+	/* short circuit for reference tables */
 	if (partitionMethod == DISTRIBUTE_BY_ALL)
 	{
-		/* short circuit for reference tables */
 		Assert(list_length(shardIntervalList) == 1);
 
 		return shardIntervalList;
@@ -2593,9 +2595,6 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 		/* always return empty result if WHERE clause is of the form: false (AND ..) */
 		return NIL;
 	}
-
-	/* get the partition column */
-	partitionColumn = PartitionColumn(relationId, tableId);
 
 	/* build the filter clause list for the partition method */
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
@@ -3489,9 +3488,9 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
 	{
 		Oid relationId = rangeTableEntry->relid;
 		char partitionMethod = PartitionMethod(relationId);
-		Var *partitionColumn = NULL;
+		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
 
-		/* we should never need partition column for reference tables */
+		/* reference tables do not have partition columns */
 		if (partitionMethod == DISTRIBUTE_BY_ALL)
 		{
 			partitionedOnColumn = false;
@@ -3499,7 +3498,6 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
 			return partitionedOnColumn;
 		}
 
-		partitionColumn = PartitionColumn(relationId, rangeTableId);
 		if (partitionColumn->varattno == column->varattno)
 		{
 			partitionedOnColumn = true;

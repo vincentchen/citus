@@ -384,7 +384,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	FmgrInfo *columnOutputFunctions = NULL;
 	uint64 processedRowCount = 0;
 
-	Var *partitionColumn = NULL;
+	Var *partitionColumn = PartitionColumn(tableId, 0);
 	char partitionMethod = PartitionMethod(tableId);
 
 	/* get hash function for partition column */
@@ -392,12 +392,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	/* get compare function for shard intervals */
 	compareFunction = cacheEntry->shardIntervalCompareFunction;
-
-	/* reference tables do not have partition column */
-	if (partitionMethod != DISTRIBUTE_BY_ALL)
-	{
-		partitionColumn = PartitionColumn(tableId, 0);
-	}
 
 	/* allocate column values and nulls arrays */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -538,21 +532,19 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 				}
 
 				partitionColumnValue = columnValues[partitionColumn->varattno - 1];
-
-				/* find the shard interval and id for the partition column value */
-				shardInterval = FindShardInterval(partitionColumnValue,
-												  shardIntervalCache,
-												  shardCount, partitionMethod,
-												  compareFunction, hashFunction,
-												  useBinarySearch);
 			}
-			else
-			{
-				/* reference tables always have a single shard */
-				Assert(list_length(shardIntervalList) == 1);
 
-				shardInterval = (ShardInterval *) linitial(shardIntervalList);
-			}
+			/*
+			 * Find the shard interval and id for the partition column value for
+			 * non-reference tables.
+			 * For reference table, this function blindly returns the tables single
+			 * shard.
+			 */
+			shardInterval = FindShardInterval(partitionColumnValue,
+											  shardIntervalCache,
+											  shardCount, partitionMethod,
+											  compareFunction, hashFunction,
+											  useBinarySearch);
 
 			if (shardInterval == NULL)
 			{

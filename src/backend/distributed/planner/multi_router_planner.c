@@ -1065,7 +1065,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = NULL;
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	bool hasValuesScan = false;
@@ -1075,7 +1075,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	List *onConflictSet = NIL;
 	Node *arbiterWhere = NULL;
 	Node *onConflictWhere = NULL;
-	char partitionMethod = PartitionMethod(distributedTableId);
 
 	CmdType commandType = queryTree->commandType;
 	Assert(commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -1184,16 +1183,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 							   " modification"),
 						errdetail("Multi-row INSERTs to distributed tables are not "
 								  "supported.")));
-	}
-
-	/* reference tables do not have partition column */
-	if (partitionMethod == DISTRIBUTE_BY_ALL)
-	{
-		partitionColumn = NULL;
-	}
-	else
-	{
-		partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 	}
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -1758,7 +1747,6 @@ TargetShardIntervalForModify(Query *query)
 								"and try again.")));
 	}
 
-
 	fastShardPruningPossible = FastShardPruningPossible(query->commandType,
 														partitionMethod);
 	if (fastShardPruningPossible)
@@ -1776,22 +1764,9 @@ TargetShardIntervalForModify(Query *query)
 	}
 	else
 	{
-		List *restrictClauseList = NULL;
+		List *restrictClauseList = QueryRestrictList(query);
 		Index tableId = 1;
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
-
-		/*
-		 * Reference tables do not have the notion of partition column. Thus,
-		 * there are no restrictions on the partition column.
-		 */
-		if (partitionMethod == DISTRIBUTE_BY_ALL)
-		{
-			restrictClauseList = NULL;
-		}
-		else
-		{
-			restrictClauseList = QueryRestrictList(query);
-		}
 
 		prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
 										 shardIntervalList);
@@ -1882,17 +1857,30 @@ FastShardPruning(Oid distributedTableId, Const *partitionValue)
  * statement these are the where-clause expressions. For INSERT statements we
  * build an equality clause based on the partition-column and its supplied
  * insert value.
+ *
+ * Since reference tables do not have partition columns, the function returns
+ * NIL for reference tables.
  */
 static List *
 QueryRestrictList(Query *query)
 {
 	List *queryRestrictList = NIL;
 	CmdType commandType = query->commandType;
+	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	char partitionMethod = PartitionMethod(distributedTableId);
+
+	/*
+	 * Reference tables do not have the notion of partition column. Thus,
+	 * there are no restrictions on the partition column.
+	 */
+	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	{
+		return queryRestrictList;
+	}
 
 	if (commandType == CMD_INSERT)
 	{
 		/* build equality expression based on partition column value for row */
-		Oid distributedTableId = ExtractFirstDistributedTableId(query);
 		uint32 rangeTableId = 1;
 		Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 		Const *partitionValue = ExtractInsertPartitionValue(query, partitionColumn);
