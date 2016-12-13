@@ -1172,9 +1172,9 @@ BroadcastJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		if (candidateShardCount > 0)
 		{
 			initialCandidateShardInterval =
-					(ShardInterval *) linitial(candidateShardList);
+				(ShardInterval *) linitial(candidateShardList);
 			candidatePartitionMethod =
-					PartitionMethod(initialCandidateShardInterval->relationId);
+				PartitionMethod(initialCandidateShardInterval->relationId);
 		}
 
 		if (candidatePartitionMethod == DISTRIBUTE_BY_ALL ||
