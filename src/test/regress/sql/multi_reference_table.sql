@@ -676,3 +676,60 @@ WHERE
 
 SET citus.shard_count TO DEFAULT;
 SET citus.task_executor_type to "real-time";
+
+-- some INSERT .. SELECT queries that involve both hash distributed and reference tables
+
+-- should error out since we're inserting into reference table where 
+-- not all the participants are reference tables
+INSERT INTO
+	reference_table_test (value_1)
+SELECT
+	colocated_table_test.value_1
+FROM
+	colocated_table_test, colocated_table_test_2
+WHERE
+	colocated_table_test.value_1 = colocated_table_test.value_1;
+
+-- should error out, same as the above
+INSERT INTO
+	reference_table_test (value_1)
+SELECT
+	colocated_table_test.value_1
+FROM
+	colocated_table_test, reference_table_test
+WHERE
+	colocated_table_test.value_1 = reference_table_test.value_1;
+
+-- now, insert into the hash partitioned table and use reference 
+-- tables in the SELECT queries
+INSERT INTO
+	colocated_table_test (value_1, value_2)
+SELECT 
+	colocated_table_test_2.value_1, reference_table_test.value_2
+FROM
+	colocated_table_test_2, reference_table_test
+WHERE
+	colocated_table_test_2.value_4 = reference_table_test.value_4
+RETURNING value_1, value_2;
+
+-- some more complex queries (Note that there are more complex queries in multi_insert_select.sql)
+INSERT INTO
+	colocated_table_test (value_1, value_2)
+SELECT 
+	colocated_table_test_2.value_1, reference_table_test.value_2
+FROM
+	colocated_table_test_2, reference_table_test
+WHERE
+	colocated_table_test_2.value_2 = reference_table_test.value_2
+RETURNING value_1, value_2;
+
+-- partition column value comes from reference table which should error out
+INSERT INTO
+	colocated_table_test (value_1, value_2)
+SELECT
+	reference_table_test.value_2, colocated_table_test_2.value_1
+FROM
+	colocated_table_test_2, reference_table_test
+WHERE
+	colocated_table_test_2.value_4 = reference_table_test.value_4
+RETURNING value_1, value_2;
