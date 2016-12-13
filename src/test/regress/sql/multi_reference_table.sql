@@ -733,3 +733,10 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
+
+-- some tests for mark_tables_colocated
+-- should error out
+SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);
+
+-- should work sliently
+SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);

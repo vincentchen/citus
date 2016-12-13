@@ -138,7 +138,7 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
  * For hash partitioned tables, it calculates hash value of a number in its
  * range (e.g. min value) and finds which shard should contain the hashed
  * value. For reference tables (i.e., all distributed), it simply returns 0.
- * For distribution methods, the function errors out.
+ * For distribution methods other than hash and reference, the function errors out.
  */
 int
 FindShardIntervalIndex(ShardInterval *shardInterval)

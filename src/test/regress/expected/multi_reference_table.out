@@ -1148,3 +1148,15 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
 ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+-- some tests for mark_tables_colocated
+-- should error out
+SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);
+ERROR:  cannot colocate tables colocated_table_test_2 and reference_table_test
+DETAIL:  Distribution methods types don't match for colocated_table_test_2 and reference_table_test.
+-- should work sliently
+SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
