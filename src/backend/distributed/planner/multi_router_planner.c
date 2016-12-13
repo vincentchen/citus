@@ -119,9 +119,9 @@ static RelationRestrictionContext * CopyRelationRestrictionContext(
 static Node * InstantiatePartitionQual(Node *node, void *context);
 static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree,
 												 RangeTblEntry *insertRte,
-												 RangeTblEntry *subqueryRte);
+												 RangeTblEntry *subqueryRte,
+												 bool allReferenceTables);
 static void ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query);
-static void ErrorIfNotAllParticipatingTablesAreReferenceTables(Query *query);
 static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query,
 														   RangeTblEntry *insertRte,
 														   RangeTblEntry *subqueryRte,
@@ -249,12 +249,14 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
 	 * modify queries. Thus, handle separately.
 	 */
-	ErrorIfInsertSelectQueryNotSupported(originalQuery, insertRte, subqueryRte);
+	ErrorIfInsertSelectQueryNotSupported(originalQuery, insertRte, subqueryRte,
+										 allReferenceTables);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -345,7 +347,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	bool routerPlannable = false;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
-	bool allReferenceTables = AllParticipatingTablesAreReferenceTables(originalQuery);
+	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -637,7 +639,7 @@ ExtractInsertRangeTableEntry(Query *query)
  */
 static void
 ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
-									 RangeTblEntry *subqueryRte)
+									 RangeTblEntry *subqueryRte, bool allReferenceTables)
 {
 	Query *subquery = NULL;
 	Oid selectPartitionColumnTableId = InvalidOid;
@@ -668,7 +670,14 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 	 */
 	if (targetPartitionMethod == DISTRIBUTE_BY_ALL)
 	{
-		ErrorIfNotAllParticipatingTablesAreReferenceTables(queryTree);
+		if (!allReferenceTables)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("If data inserted into a reference table, "
+								   "all of the participating tables in the "
+								   "INSERT INTO ... SELECT query should be "
+								   "reference tables.")));
+		}
 	}
 	else
 	{
@@ -786,64 +795,6 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 
 
 /*
- * TODO: update comments
- */
-static void
-ErrorIfNotAllParticipatingTablesAreReferenceTables(Query *query)
-{
-	if (!AllParticipatingTablesAreReferenceTables(query))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("If data inserted into a reference table, "
-							   "all of the participating tables in the "
-							   "INSERT INTO ... SELECT query should be "
-							   "reference tables.")));
-	}
-}
-
-
-/*
- * TODO: update comment
- */
-bool
-AllParticipatingTablesAreReferenceTables(Query *query)
-{
-	List *rangeTableList = NIL;
-	ListCell *rangeTableCell = NULL;
-
-	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
-
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		Oid relationId = InvalidOid;
-		char partitionMethod = '\0';
-
-		/*
-		 * We're only interested in relation RTEs (i.e., we need to
-		 * skip the subquery RTE in INSERT ... SELECT query).
-		 */
-		if (rangeTableEntry->rtekind != RTE_RELATION)
-		{
-			continue;
-		}
-
-		/* now process the relation RTE */
-		relationId = rangeTableEntry->relid;
-
-		partitionMethod = PartitionMethod(relationId);
-		if (partitionMethod != DISTRIBUTE_BY_ALL)
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
  * ErrorIfInsertPartitionColumnDoesNotMatchSelect checks whether the INSERTed table's
  * partition column value matches with the any of the SELECTed table's partition column.
  *
@@ -931,8 +882,9 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
  *   (ii) Target list does not include a bare partition column.
  *
  * Note that if the input query is not an INSERT .. SELECT the assertion fails. Lastly,
- * if all the participating tables in the query are reference tables, we skip adding
- * the quals to the query.
+ * if all the participating tables in the query are reference tables, we implicitly
+ * skip adding the quals to the query since IsPartitionColumnRecursive() always returns
+ * false for reference tables.
  */
 void
 AddUninstantiatedPartitionRestriction(Query *originalQuery)
@@ -944,16 +896,6 @@ AddUninstantiatedPartitionRestriction(Query *originalQuery)
 	List *targetList = NULL;
 
 	Assert(InsertSelectQuery(originalQuery));
-
-	/*
-	 * Given that reference tables do not have partition columns, we
-	 * could skip adding quals to the queries where all tables are
-	 * reference tables.
-	 */
-	if (AllParticipatingTablesAreReferenceTables(originalQuery))
-	{
-		return;
-	}
 
 	subqueryEntry = ExtractSelectRangeTableEntry(originalQuery);
 	subquery = subqueryEntry->subquery;
