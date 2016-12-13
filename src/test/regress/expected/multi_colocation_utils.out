@@ -232,7 +232,7 @@ SELECT shards_colocated(1300016, 1300016);
 SELECT shards_colocated(1300020, 1300020);
  shards_colocated 
 ------------------
- f
+ t
 (1 row)
 
 -- check shard co-location with same co-location group

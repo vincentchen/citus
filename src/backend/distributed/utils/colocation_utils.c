@@ -309,6 +309,15 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 	char leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
 	char rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
 
+	/* if both shards are  the same, return true */
+	if (leftShardInterval->shardId == rightShardInterval->shardId)
+	{
+		return true;
+	}
+
+	/* if partition methods are not the same, shards cannot be considered as co-located */
+	leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
+	rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
 	if (leftIntervalPartitionMethod != rightIntervalPartitionMethod)
 	{
 		return false;

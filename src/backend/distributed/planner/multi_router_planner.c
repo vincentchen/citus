@@ -478,7 +478,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
  *    hashfunc(partitionColumn) <= $upper_bound
  *
  * The function expects and asserts that subquery's target list contains a partition
- * column value.
+ * column value. Thus, this function should never be called with reference tables.
  */
 static void
 AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval)
