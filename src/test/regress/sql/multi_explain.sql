@@ -180,6 +180,20 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 
+-- make sure that EXPLAIN works without 
+-- problems for queries that inlvolves only 
+-- reference tables
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation
+	WHERE n_name = 'CHINA'$$);
+
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation, supplier
+	WHERE nation.n_nationkey = supplier.s_nationkey$$);
+
+
 EXPLAIN (COSTS FALSE, FORMAT YAML)
 	SELECT count(*)
 	FROM lineitem, orders, customer, supplier

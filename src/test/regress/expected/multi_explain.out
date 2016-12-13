@@ -601,6 +601,19 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
+-- make sure that EXPLAIN works without 
+-- problems for queries that inlvolves only 
+-- reference tables
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation
+	WHERE n_name = 'CHINA'$$);
+t
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation, supplier
+	WHERE nation.n_nationkey = supplier.s_nationkey$$);
+t
 EXPLAIN (COSTS FALSE, FORMAT YAML)
 	SELECT count(*)
 	FROM lineitem, orders, customer, supplier
@@ -624,8 +637,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
           - Node Type: "Seq Scan"
             Parent Relationship: "Outer"
             Parallel Aware: false
-            Relation Name: "pg_merge_job_570030"
-            Alias: "pg_merge_job_570030"
+            Relation Name: "pg_merge_job_570032"
+            Alias: "pg_merge_job_570032"
 -- test parallel aggregates
 SET parallel_setup_cost=0;
 SET parallel_tuple_cost=0;
@@ -641,7 +654,7 @@ Finalize Aggregate
               ->  Parallel Seq Scan on lineitem_clone
 -- ensure distributed plans don't break
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
-Distributed Query into pg_merge_job_570031
+Distributed Query into pg_merge_job_570033
   Executor: Task-Tracker
   Task Count: 8
   Tasks Shown: One of 8
@@ -651,12 +664,12 @@ Distributed Query into pg_merge_job_570031
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570031
+        ->  Seq Scan on pg_merge_job_570033
 -- ensure EXPLAIN EXECUTE doesn't crash
 PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
-Distributed Query into pg_merge_job_570032
+Distributed Query into pg_merge_job_570034
   Executor: Task-Tracker
   Task Count: 4
   Tasks Shown: One of 4
@@ -667,11 +680,11 @@ Distributed Query into pg_merge_job_570032
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570032
+        ->  Seq Scan on pg_merge_job_570034
 SET citus.task_executor_type TO 'real-time';
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Distributed Query into pg_merge_job_570033
+Distributed Query into pg_merge_job_570035
   Executor: Router
   Task Count: 1
   Tasks Shown: All
@@ -684,7 +697,7 @@ Distributed Query into pg_merge_job_570033
 PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
-Distributed Query into pg_merge_job_570034
+Distributed Query into pg_merge_job_570036
   Executor: Real-Time
   Task Count: 4
   Tasks Shown: One of 4
@@ -695,4 +708,4 @@ Distributed Query into pg_merge_job_570034
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570034
+        ->  Seq Scan on pg_merge_job_570036
