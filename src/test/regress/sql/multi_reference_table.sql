@@ -674,6 +674,10 @@ FROM
 WHERE 
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1;
 
+
+SET client_min_messages TO NOTICE;
+SET citus.log_multi_join_order TO FALSE;
+
 SET citus.shard_count TO DEFAULT;
 SET citus.task_executor_type to "real-time";
 
@@ -788,3 +792,35 @@ FROM
 	colocated_table_test_2, reference_schema.reference_table_test_sixth as reftable
 WHERE
 	colocated_table_test_2.value_4 = reftable.value_4;
+
+
+-- let's now test TRUNCATE and DROP TABLE 
+-- delete all rows and ingest some data
+DELETE FROM reference_table_test;
+
+INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+INSERT INTO reference_table_test VALUES (3, 3.0, '3', '2016-12-03');
+INSERT INTO reference_table_test VALUES (4, 4.0, '4', '2016-12-04');
+INSERT INTO reference_table_test VALUES (5, 5.0, '5', '2016-12-05');
+
+SELECT
+	count(*)
+FROM
+	reference_table_test;
+
+-- truncate it and get the result back
+TRUNCATE reference_table_test;
+
+SELECT
+	count(*)
+FROM
+	reference_table_test;
+
+-- now try dropping one of the existing reference tables
+-- and check the metadata
+SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
+SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
+DROP TABLE reference_table_test_fifth;
+SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
+SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
