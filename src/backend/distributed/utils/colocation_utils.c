@@ -301,7 +301,18 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 
 
 /*
- * TODO: update comment
+ * ShardsIntervalsEqual checks if two shard intervals of distributed
+ * tables are equal.
+ *
+ * Notes on the function:
+ * (i)   The function returns true if both shard intervals are equal.
+ * (ii)  The function returns false even if the shard intervals equal, but,
+ *       their distribution method are different.
+ * (iii) The function returns false for append and range partitioned tables
+ *       excluding (i) case.
+ * (iv)  For reference tables, all shards are equal (i.e., same replication factor
+ *       and shard min/max values). Thus, always return true for shards of reference
+ *       tables.
  */
 static bool
 ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
@@ -607,11 +618,11 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
-	 * If distribution type of the table is not hash or all, each shard of
-	 * the table is only co-located with itself.
+	 * If distribution type of the table is not hash or reference, each shard of
+	 * the shard is only co-located with itself.
 	 */
-	if (!((partitionMethod == DISTRIBUTE_BY_HASH) ||
-		  (partitionMethod == DISTRIBUTE_BY_ALL)))
+	if ((partitionMethod == DISTRIBUTE_BY_APPEND) ||
+		(partitionMethod == DISTRIBUTE_BY_RANGE))
 	{
 		colocatedShardList = lappend(colocatedShardList, shardInterval);
 		return colocatedShardList;

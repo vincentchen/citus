@@ -194,7 +194,7 @@ CreateReferenceTable(Oid relationId)
 							  DISTRIBUTE_BY_ALL, colocationId, REPLICATION_MODEL_2PC);
 
 	/* now, create the single shard replicated to all nodes */
-	CreateReferenceTableShards(relationId);
+	CreateReferenceTableShard(relationId);
 }
 
 

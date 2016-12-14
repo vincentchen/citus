@@ -322,10 +322,12 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 
 
 /*
- * TODO: update comment fixed shard count and rep factor
+ * CreateReferenceTableShard creates a single shard for the given
+ * distributedTableId. The created shard does not have min/max values.
+ * Also, the shard is replicated to the all active nodes in the cluster.
  */
 void
-CreateReferenceTableShards(Oid distributedTableId)
+CreateReferenceTableShard(Oid distributedTableId)
 {
 	char *relationOwner = NULL;
 	char shardStorageType = 0;

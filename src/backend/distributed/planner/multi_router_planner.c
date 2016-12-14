@@ -2717,6 +2717,7 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 	newContext->hasDistributedRelation = oldContext->hasDistributedRelation;
 	newContext->hasLocalRelation = oldContext->hasLocalRelation;
+	newContext->allReferenceTables = oldContext->allReferenceTables;
 	newContext->relationRestrictionList = NIL;
 
 	foreach(relationRestrictionCell, oldContext->relationRestrictionList)
