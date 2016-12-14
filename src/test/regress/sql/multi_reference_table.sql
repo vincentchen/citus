@@ -935,6 +935,27 @@ EXECUTE insert_into_ref_table_pr(6, 6.0, '6', '2016-12-06');
 SELECT select_count_all();
 TRUNCATE reference_table_test;
 
+-- reference tables work with composite key
+-- and we even do not need to create hash
+-- function etc.
+
+-- first create the type on all nodes
+CREATE TYPE reference_comp_key as (key text, value text);
+\c - - - :worker_1_port
+CREATE TYPE reference_comp_key as (key text, value text);
+\c - - - :worker_2_port
+CREATE TYPE reference_comp_key as (key text, value text);
+
+\c - - - :master_port
+CREATE TABLE reference_table_composite (id int PRIMARY KEY, data reference_comp_key);
+SELECT create_reference_table('reference_table_composite');
+
+-- insert and query some data
+INSERT INTO reference_table_composite (id, data) VALUES (1, ('key_1', 'value_1')::reference_comp_key);
+INSERT INTO reference_table_composite (id, data) VALUES (2, ('key_2', 'value_2')::reference_comp_key);
+
+SELECT * FROM reference_table_composite;
+SELECT (data).key FROM reference_table_composite ;
 
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
