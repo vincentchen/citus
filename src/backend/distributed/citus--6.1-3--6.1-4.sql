@@ -1,4 +1,4 @@
-/* citus--6.0-18--6.0-19.sql */
+/* citus--6.1-3--6.1-4.sql */
 
 SET search_path = 'pg_catalog';
 
