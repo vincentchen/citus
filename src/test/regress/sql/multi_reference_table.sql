@@ -895,6 +895,46 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE placementid = :a_placeme
 SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
 
+-- some queries that are captured in functions
+CREATE FUNCTION select_count_all() RETURNS bigint AS '
+        SELECT
+                count(*)
+        FROM
+                reference_table_test;
+' LANGUAGE SQL;
+
+CREATE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp) 
+RETURNS void AS '
+       INSERT INTO reference_table_test VALUES ($1, $2, $3, $4);
+' LANGUAGE SQL;
+
+TRUNCATE reference_table_test;
+SELECT select_count_all();
+SELECT insert_into_ref_table(1, 1.0, '1', '2016-12-01');
+SELECT insert_into_ref_table(2, 2.0, '2', '2016-12-02');
+SELECT insert_into_ref_table(3, 3.0, '3', '2016-12-03');
+SELECT insert_into_ref_table(4, 4.0, '4', '2016-12-04');
+SELECT insert_into_ref_table(5, 5.0, '5', '2016-12-05');
+SELECT insert_into_ref_table(6, 6.0, '6', '2016-12-06');
+SELECT select_count_all();
+TRUNCATE reference_table_test;
+
+-- some prepared queries and pl/pgsql functions
+PREPARE insert_into_ref_table_pr (int, float, text, timestamp) 
+	AS INSERT INTO reference_table_test VALUES ($1, $2, $3, $4);
+
+-- reference tables do not have up-to-five execution limit as other tables
+EXECUTE insert_into_ref_table_pr(1, 1.0, '1', '2016-12-01');
+EXECUTE insert_into_ref_table_pr(2, 2.0, '2', '2016-12-02');
+EXECUTE insert_into_ref_table_pr(3, 3.0, '3', '2016-12-03');
+EXECUTE insert_into_ref_table_pr(4, 4.0, '4', '2016-12-04');
+EXECUTE insert_into_ref_table_pr(5, 5.0, '5', '2016-12-05');
+EXECUTE insert_into_ref_table_pr(6, 6.0, '6', '2016-12-06');
+
+-- see the count, then truncate the table
+SELECT select_count_all();
+TRUNCATE reference_table_test;
+
 
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
