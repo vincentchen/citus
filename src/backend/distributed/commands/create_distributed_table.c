@@ -107,17 +107,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
-	/* error if user tries to create reference tables via wrong API */
-	if (distributionMethod == DISTRIBUTE_BY_ALL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("use create_reference_table() to create reference "
-							   "tables")));
-	}
-
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, INVALID_COLOCATION_ID);
-
 
 	PG_RETURN_VOID();
 }
@@ -136,14 +127,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
-
-	/* error if user tries to create reference tables via wrong API */
-	if (distributionMethod == DISTRIBUTE_BY_ALL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("use create_reference_table() to create reference "
-							   "tables")));
-	}
 
 	/* if distribution method is not hash, just create partition metadata */
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
