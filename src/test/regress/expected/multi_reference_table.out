@@ -1519,13 +1519,63 @@ SELECT * FROM reference_table_composite;
   2 | (key_2,value_2)
 (2 rows)
 
-SELECT (data).key FROM reference_table_composite ;
+SELECT (data).key FROM reference_table_composite;
   key  
 -------
  key_1
  key_2
 (2 rows)
 
+-- make sure that reference tables obeys single shard transactions
+TRUNCATE reference_table_test;
+BEGIN;
+INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
+SELECT * FROM reference_table_test;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       1 |       1 | 1       | Thu Dec 01 00:00:00 2016
+(1 row)
+
+ROLLBACK;
+SELECT * FROM reference_table_test;
+ value_1 | value_2 | value_3 | value_4 
+---------+---------+---------+---------
+(0 rows)
+
+-- now insert a row and commit
+BEGIN;
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+COMMIT;
+SELECT * FROM reference_table_test;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       2 |       2 | 2       | Fri Dec 02 00:00:00 2016
+(1 row)
+
+-- one basic UPDATE test
+BEGIN;
+UPDATE reference_table_test SET value_1 = 10 WHERE value_1 = 2;
+COMMIT;
+SELECT * FROM reference_table_test;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+      10 |       2 | 2       | Fri Dec 02 00:00:00 2016
+(1 row)
+
+-- do not allow mixing transactions
+BEGIN;
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
+ERROR:  multi-shard data modifications must not appear in transaction blocks which contain single-shard DML commands
+ROLLBACK;
+-- Do not allow DDL and modification in the same transaction
+BEGIN;
+ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
+ROLLBACK;
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
 		   reference_table_test_fourth, reference_table_ddl;

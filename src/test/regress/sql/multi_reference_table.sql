@@ -955,7 +955,40 @@ INSERT INTO reference_table_composite (id, data) VALUES (1, ('key_1', 'value_1')
 INSERT INTO reference_table_composite (id, data) VALUES (2, ('key_2', 'value_2')::reference_comp_key);
 
 SELECT * FROM reference_table_composite;
-SELECT (data).key FROM reference_table_composite ;
+SELECT (data).key FROM reference_table_composite;
+
+-- make sure that reference tables obeys single shard transactions
+TRUNCATE reference_table_test;
+
+BEGIN;
+INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
+SELECT * FROM reference_table_test;
+ROLLBACK;
+SELECT * FROM reference_table_test;
+
+-- now insert a row and commit
+BEGIN;
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+COMMIT;
+SELECT * FROM reference_table_test;
+
+-- one basic UPDATE test
+BEGIN;
+UPDATE reference_table_test SET value_1 = 10 WHERE value_1 = 2;
+COMMIT;
+SELECT * FROM reference_table_test;
+
+-- do not allow mixing transactions
+BEGIN;
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
+ROLLBACK;
+
+-- Do not allow DDL and modification in the same transaction
+BEGIN;
+ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
+INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
+ROLLBACK;
 
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
