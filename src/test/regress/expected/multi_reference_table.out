@@ -18,14 +18,14 @@ SELECT create_reference_table('reference_table_test');
 
 -- see that partkey is NULL
 SELECT
-	partmethod, (partkey IS NULL) as partkeyisnull, colocationid
+	partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
 FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
- partmethod | partkeyisnull | colocationid 
-------------+---------------+--------------
- l          | t             |            1
+ partmethod | partkeyisnull | colocationid | repmodel 
+------------+---------------+--------------+----------
+ l          | t             |            1 | t
 (1 row)
 
 -- now see that shard min/max values are NULL

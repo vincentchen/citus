@@ -58,6 +58,7 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
 /* valid values for repmodel are 'c' for coordinator and 's' for streaming */
 #define REPLICATION_MODEL_COORDINATOR 'c'
 #define REPLICATION_MODEL_STREAMING 's'
+#define REPLICATION_MODEL_2PC 't'
 
 
 #endif   /* PG_DIST_PARTITION_H */

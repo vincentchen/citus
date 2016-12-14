@@ -62,7 +62,8 @@
 /* local function forward declarations */
 static void CreateReferenceTable(Oid relationId);
 static void ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
-									  char distributionMethod, uint32 colocationId);
+									  char distributionMethod, uint32 colocationId,
+									  char replicationModel);
 static char LookupDistributionMethod(Oid distributionMethodOid);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId,
 												  Node *distributionKey);
@@ -76,12 +77,14 @@ static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 												 Var *distributionColumn,
 												 uint32 colocationId);
 static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
-									  Var *distributionColumn, uint32 colocationId);
+									  Var *distributionColumn, uint32 colocationId,
+									  char replicationModel);
 static uint32 ColocationId(int shardCount, int replicationFactor,
 						   Oid distributionColumnType);
 static uint32 GetNextColocationId(void);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
-									   int shardCount, int replicationFactor);
+									   int shardCount, int replicationFactor,
+									   char replicationModel);
 
 
 /* exports for SQL callable functions */
@@ -108,7 +111,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
-							  distributionMethod, INVALID_COLOCATION_ID);
+							  distributionMethod, INVALID_COLOCATION_ID,
+							  REPLICATION_MODEL_COORDINATOR);
 
 	PG_RETURN_VOID();
 }
@@ -132,13 +136,15 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
 	{
 		ConvertToDistributedTable(relationId, distributionColumnName,
-								  distributionMethod, INVALID_COLOCATION_ID);
+								  distributionMethod, INVALID_COLOCATION_ID,
+								  REPLICATION_MODEL_COORDINATOR);
 		PG_RETURN_VOID();
 	}
 
 	/* use configuration values for shard count and shard replication factor*/
 	CreateHashDistributedTable(relationId, distributionColumnName, ShardCount,
-							   ShardReplicationFactor);
+							   ShardReplicationFactor,
+							   REPLICATION_MODEL_COORDINATOR);
 
 	PG_RETURN_VOID();
 }
@@ -147,7 +153,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 /*
  * create_reference_table accepts a table and then it creates a distributed
  * table which has one shard and replication factor is set to
- * shard_replication_factor configuration value.
+ * the worker count.
  */
 Datum
 create_reference_table(PG_FUNCTION_ARGS)
@@ -161,7 +167,9 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 
 /*
- * TODO: add comment
+ * CreateReferenceTable creates a distributed table with the given relationId. The
+ * created table has one shard and replication factor is set to the active worker
+ * count. In fact, the above is the definition of a reference table in Citus.
  */
 static void
 CreateReferenceTable(Oid relationId)
@@ -183,7 +191,7 @@ CreateReferenceTable(Oid relationId)
 
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
-							  DISTRIBUTE_BY_ALL, colocationId);
+							  DISTRIBUTE_BY_ALL, colocationId, REPLICATION_MODEL_2PC);
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShards(relationId);
@@ -203,7 +211,8 @@ CreateReferenceTable(Oid relationId)
  */
 static void
 ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
-						  char distributionMethod, uint32 colocationId)
+						  char distributionMethod, uint32 colocationId,
+						  char replicationModel)
 {
 	Relation relation = NULL;
 	TupleDesc relationDesc = NULL;
@@ -261,7 +270,10 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 						errhint("Empty your table before distributing it.")));
 	}
 
-	/* skip building distribution column for reference tables */
+	/*
+	 * Distribution column returns NULL for reference tables,
+	 * but it is not used below for reference tables.
+	 */
 	distributionColumn = BuildDistributionKeyFromColumnName(relation,
 															distributionColumnName);
 
@@ -300,7 +312,7 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 								  colocationId);
 
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
-							  colocationId);
+							  colocationId, replicationModel);
 
 	relation_close(relation, NoLock);
 
@@ -638,10 +650,10 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
  */
 static void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
-						  Var *distributionColumn, uint32 colocationId)
+						  Var *distributionColumn, uint32 colocationId,
+						  char replicationModel)
 {
 	Relation pgDistPartition = NULL;
-	const char replicationModel = 'c';
 	char *distributionColumnString = NULL;
 
 	HeapTuple newTuple = NULL;
@@ -1032,7 +1044,7 @@ GetNextColocationId()
  */
 static void
 CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
-						   int shardCount, int replicationFactor)
+						   int shardCount, int replicationFactor, char replicationModel)
 {
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
@@ -1068,7 +1080,8 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 
 		Oid colocatedTableId = ColocatedTableId(colocationId);
 		ConvertToDistributedTable(relationId, distributionColumnName,
-								  DISTRIBUTE_BY_HASH, colocationId);
+								  DISTRIBUTE_BY_HASH, colocationId,
+								  REPLICATION_MODEL_COORDINATOR);
 
 		CreateColocatedShards(relationId, colocatedTableId);
 		ereport(DEBUG2, (errmsg("table %s is added to colocation group: %d",
@@ -1079,7 +1092,8 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		colocationId = CreateColocationGroup(shardCount, replicationFactor,
 											 distributionColumnType);
 		ConvertToDistributedTable(relationId, distributionColumnName,
-								  DISTRIBUTE_BY_HASH, colocationId);
+								  DISTRIBUTE_BY_HASH, colocationId,
+								  REPLICATION_MODEL_COORDINATOR);
 
 		/* use the default way to create shards */
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
