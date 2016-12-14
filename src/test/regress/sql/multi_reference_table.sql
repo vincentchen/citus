@@ -861,6 +861,41 @@ DROP INDEX reference_index_2;
 ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
 ALTER TABLE reference_table_ddl SET WITH OIDS;
 
+-- now test reference tables against some helper UDFs that Citus provides
+
+-- cannot delete / drop shards from a reference table
+SELECT master_apply_delete_command('DELETE FROM reference_table_ddl');
+
+-- cannot add shards
+SELECT master_create_empty_shard('reference_table_ddl');
+
+-- master_modify_multiple_shards works, but, does it make sense to use at all?
+INSERT INTO reference_table_ddl (value_2, value_3) VALUES (7, 'aa');
+SELECT master_modify_multiple_shards('DELETE FROM reference_table_ddl WHERE value_2 = 7');
+INSERT INTO reference_table_ddl (value_2, value_3) VALUES (7, 'bb');
+SELECT master_modify_multiple_shards('DELETE FROM reference_table_ddl');
+
+-- get/update the statistics
+SELECT part_storage_type, part_key, part_replica_count, part_max_size,
+           part_placement_policy FROM master_get_table_metadata('reference_table_ddl');
+SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_table_ddl'::regclass \gset
+SELECT master_update_shard_statistics(:a_shard_id);
+
+CREATE TABLE append_reference_tmp_table (id INT);
+SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 'localhost', :master_port);
+
+SELECT master_get_table_ddl_events('reference_table_ddl');
+
+-- in reality, we wouldn't need to repair any reference table shard placements
+-- however, the test could be relevant for other purposes
+SELECT placementid AS a_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_1_port \gset
+SELECT placementid AS b_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_2_port \gset
+
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE placementid = :a_placement_id;
+SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
+
+
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
 		   reference_table_test_fourth, reference_table_ddl;
