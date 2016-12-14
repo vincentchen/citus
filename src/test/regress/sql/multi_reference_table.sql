@@ -824,3 +824,44 @@ SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '
 DROP TABLE reference_table_test_fifth;
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
 SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
+
+
+-- now test DDL changes
+CREATE TABLE reference_table_ddl (value_1 int, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_table_ddl');
+
+-- CREATE & DROP index and check the workers
+CREATE INDEX reference_index_1 ON reference_table_ddl(value_1);
+CREATE INDEX reference_index_2 ON reference_table_ddl(value_2, value_3);
+
+-- should be able to create/drop UNIQUE index on a reference table
+CREATE UNIQUE INDEX reference_index_3 ON reference_table_ddl(value_1);
+
+-- should be able to add a column
+ALTER TABLE reference_table_ddl ADD COLUMN value_5 INTEGER;
+ALTER TABLE reference_table_ddl ALTER COLUMN value_5 SET DATA TYPE FLOAT;
+
+ALTER TABLE reference_table_ddl DROP COLUMN value_1;
+ALTER TABLE reference_table_ddl ALTER COLUMN value_2 SET DEFAULT 25.0;
+ALTER TABLE reference_table_ddl ALTER COLUMN value_3 SET NOT NULL;
+
+-- see that Citus applied all DDLs to the table
+\d reference_table_ddl
+
+-- also to the shard placements
+\c - - - :worker_1_port
+\d reference_table_ddl*
+\c - - - :master_port
+DROP INDEX reference_index_2;
+\c - - - :worker_1_port
+\d reference_table_ddl*
+\c - - - :master_port
+
+-- as we expect, renaming and setting WITH OIDS does not work for reference tables
+ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
+ALTER TABLE reference_table_ddl SET WITH OIDS;
+
+-- clean up tables
+DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
+		   reference_table_test_fourth, reference_table_ddl;
+DROP SCHEMA reference_schema CASCADE;

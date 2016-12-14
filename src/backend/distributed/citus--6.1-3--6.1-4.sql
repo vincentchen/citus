@@ -6,7 +6,4 @@ SET search_path = 'pg_catalog';
 -- wouldn't have partition columns, which we represent as NULL
 ALTER TABLE pg_dist_partition ALTER COLUMN partkey DROP NOT NULL;
 
--- add the new distribution type
---ALTER TYPE citus.distribution_type ADD VALUE 'all' AFTER 'append';
-
 RESET search_path;
