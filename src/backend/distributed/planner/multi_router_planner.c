@@ -668,7 +668,7 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 	 * If we're inserting into a reference table, all participating tables
 	 * should be reference tables as well.
 	 */
-	if (targetPartitionMethod == DISTRIBUTE_BY_ALL)
+	if (targetPartitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		if (!allReferenceTables)
 		{
@@ -842,7 +842,7 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 			 * Reference tables doesn't have a partition column, thus partition columns
 			 * cannot match at all.
 			 */
-			if (PartitionMethod(subqeryTargetEntry->resorigtbl) == DISTRIBUTE_BY_ALL)
+			if (PartitionMethod(subqeryTargetEntry->resorigtbl) == DISTRIBUTE_BY_NONE)
 			{
 				partitionColumnsMatch = false;
 				break;
@@ -1815,7 +1815,7 @@ QueryRestrictList(Query *query)
 	 * Reference tables do not have the notion of partition column. Thus,
 	 * there are no restrictions on the partition column.
 	 */
-	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return queryRestrictList;
 	}
@@ -2478,7 +2478,7 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 			char partitionMethod = PartitionMethod(distributedTableId);
 
 			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-				  DISTRIBUTE_BY_ALL))
+				  DISTRIBUTE_BY_NONE))
 			{
 				return false;
 			}

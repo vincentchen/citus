@@ -343,7 +343,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
-	 * require ownership privileges - shards for all-partitioned tables are
+	 * require ownership privileges - shards for reference tables are
 	 * only created once, not continually during ingest as for the other
 	 * partitioning types such as append and range.
 	 */

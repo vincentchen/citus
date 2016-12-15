@@ -107,7 +107,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 								  targetRelationName)));
 	}
 
-	if (sourcePartitionMethod == DISTRIBUTE_BY_ALL)
+	if (sourcePartitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		sourceDistributionColumnType = InvalidOid;
 		targetDistributionColumnType = InvalidOid;
@@ -338,7 +338,7 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 	{
 		return HashPartitionedShardIntervalsEqual(leftShardInterval, rightShardInterval);
 	}
-	else if (leftIntervalPartitionMethod == DISTRIBUTE_BY_ALL)
+	else if (leftIntervalPartitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		/*
 		 * Reference tables has only a single shard and all reference tables

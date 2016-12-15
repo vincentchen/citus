@@ -191,7 +191,7 @@ CreateReferenceTable(Oid relationId)
 
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
-							  DISTRIBUTE_BY_ALL, colocationId, REPLICATION_MODEL_2PC);
+							  DISTRIBUTE_BY_NONE, colocationId, REPLICATION_MODEL_2PC);
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
@@ -332,7 +332,7 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
  * constraints.
  *
  * The function skips the uniqeness checks for reference tables (i.e., distribution
- * method is 'all').
+ * method is 'none').
  *
  * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned
  * tables, since currently there is no way of enforcing uniqueness for
@@ -360,7 +360,7 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 	 * TODO: Here we should be erroring out if there exists any foreign keys
 	 * from/to a reference table.
 	 */
-	if (distributionMethod == DISTRIBUTE_BY_ALL)
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return;
 	}
@@ -675,7 +675,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
 	/* set partkey column to NULL for reference tables */
-	if (distributionMethod != DISTRIBUTE_BY_ALL)
+	if (distributionMethod != DISTRIBUTE_BY_NONE)
 	{
 		distributionColumnString = nodeToString((Node *) distributionColumn);
 
@@ -779,7 +779,7 @@ LookupDistributionMethod(Oid distributionMethodOid)
 	}
 	else if (strncmp(enumLabel, "all", NAMEDATALEN) == 0)
 	{
-		distributionMethod = DISTRIBUTE_BY_ALL;
+		distributionMethod = DISTRIBUTE_BY_NONE;
 	}
 	else
 	{

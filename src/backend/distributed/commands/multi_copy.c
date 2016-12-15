@@ -219,7 +219,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		char partitionMethod = PartitionMethod(relationId);
 
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-			DISTRIBUTE_BY_RANGE || partitionMethod == DISTRIBUTE_BY_ALL)
+			DISTRIBUTE_BY_RANGE || partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			CopyToExistingShards(copyStatement, completionTag);
 		}
@@ -423,7 +423,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	}
 
 	/* error if any shard missing min/max values for non reference tables */
-	if (partitionMethod != DISTRIBUTE_BY_ALL &&
+	if (partitionMethod != DISTRIBUTE_BY_NONE &&
 		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

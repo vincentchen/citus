@@ -137,8 +137,8 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
  *
  * For hash partitioned tables, it calculates hash value of a number in its
  * range (e.g. min value) and finds which shard should contain the hashed
- * value. For reference tables (i.e., all distributed), it simply returns 0.
- * For distribution methods other than hash and reference, the function errors out.
+ * value. For reference tables, it simply returns 0. For distribution methods
+ * other than hash and reference, the function errors out.
  */
 int
 FindShardIntervalIndex(ShardInterval *shardInterval)
@@ -152,7 +152,7 @@ FindShardIntervalIndex(ShardInterval *shardInterval)
 	int shardIndex = -1;
 
 	/* short-circuit for reference tables */
-	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		/* reference tables has only a single shard, so the index is fixed to 0 */
 		Assert(cacheEntry->shardIntervalArrayLength == 1);
@@ -239,7 +239,7 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
 			shardInterval = shardIntervalCache[shardIndex];
 		}
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_ALL)
+	else if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		int shardIndex = 0;
 

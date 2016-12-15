@@ -131,7 +131,7 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 		Oid relationId = rangeTableEntry->relationId;
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
-		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_ALL &&
+		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
 			cacheEntry->hasUninitializedShardInterval)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1171,7 +1171,7 @@ BroadcastJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 				PartitionMethod(initialCandidateShardInterval->relationId);
 		}
 
-		if (candidatePartitionMethod == DISTRIBUTE_BY_ALL ||
+		if (candidatePartitionMethod == DISTRIBUTE_BY_NONE ||
 			candidateShardCount < LargeTableShardCount)
 		{
 			performBroadcastJoin = true;
@@ -1293,7 +1293,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
 	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH &&
-		candidatePartitionMethod != DISTRIBUTE_BY_ALL)
+		candidatePartitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		OpExpr *joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
 													   applicableJoinClauses);
@@ -1559,7 +1559,7 @@ PartitionKey(Oid relationId)
 	Var *partitionKey = NULL;
 
 	/* reference tables do not have partition column */
-	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_ALL)
+	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return NULL;
 	}

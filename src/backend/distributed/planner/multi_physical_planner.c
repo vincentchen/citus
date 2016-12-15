@@ -2583,7 +2583,7 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 	char partitionMethod = PartitionMethod(relationId);
 
 	/* short circuit for reference tables */
-	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		Assert(list_length(shardIntervalList) == 1);
 
@@ -3493,7 +3493,7 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
 		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
 
 		/* reference tables do not have partition columns */
-		if (partitionMethod == DISTRIBUTE_BY_ALL)
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			partitionedOnColumn = false;
 

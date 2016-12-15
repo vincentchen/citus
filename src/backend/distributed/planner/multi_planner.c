@@ -389,7 +389,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 		cacheEntry = DistributedTableCacheEntry(rte->relid);
 
 		restrictionContext->allReferenceTables &=
-			(cacheEntry->partitionMethod == DISTRIBUTE_BY_ALL);
+			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
 	}
 
 	restrictionContext->relationRestrictionList =

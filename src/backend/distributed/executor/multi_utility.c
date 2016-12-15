@@ -929,7 +929,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		 * Reference tables do not have partition key, and unique constraints
 		 * are allowed for them. Thus, we added a short-circuit for reference tables.
 		 */
-		if (partitionMethod == DISTRIBUTE_BY_ALL)
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			return;
 		}

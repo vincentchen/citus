@@ -410,7 +410,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	}
 
 	/* decide and allocate interval comparison function */
-	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		shardIntervalCompareFunction = NULL;
 	}
@@ -428,7 +428,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	}
 
 	/* reference tables has a single shard which is not initialized */
-	if (partitionMethod == DISTRIBUTE_BY_ALL)
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		hasUninitializedShardInterval = true;
 
@@ -1745,7 +1745,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 			break;
 		}
 
-		case DISTRIBUTE_BY_ALL:
+		case DISTRIBUTE_BY_NONE:
 		{
 			*intervalTypeId = InvalidOid;
 			break;
