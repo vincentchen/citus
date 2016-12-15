@@ -3474,7 +3474,9 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 
 /*
  * PartitionedOnColumn finds the given column's range table entry, and checks if
- * that range table is partitioned on the given column.
+ * that range table is partitioned on the given column. Note that since reference
+ * tables do not have partition columns, the function returns false when the distributed
+ * relation is a reference table.
  */
 static bool
 PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)

@@ -305,7 +305,7 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
  * tables are equal.
  *
  * Notes on the function:
- * (i)   The function returns true if both shard intervals are equal.
+ * (i)   The function returns true if both shard intervals are the same.
  * (ii)  The function returns false even if the shard intervals equal, but,
  *       their distribution method are different.
  * (iii) The function returns false for append and range partitioned tables

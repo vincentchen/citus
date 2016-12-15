@@ -520,9 +520,10 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 			 * Find the partition column value and corresponding shard interval
 			 * for non-reference tables.
 			 * Get the existing (and only a single) shard interval for the reference
-			 * tables.
+			 * tables. Note that, reference tables has NULL partition column values so
+			 * skip the check.
 			 */
-			if (partitionMethod != DISTRIBUTE_BY_ALL)
+			if (partitionColumn != NULL)
 			{
 				if (columnNulls[partitionColumn->varattno - 1])
 				{

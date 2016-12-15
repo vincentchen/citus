@@ -196,7 +196,9 @@ FindShardIntervalIndex(ShardInterval *shardInterval)
 
 /*
  * FindShardInterval finds a single shard interval in the cache for the
- * given partition column value.
+ * given partition column value. Note that reference tables do not have
+ * partition columns, thus, pass partitionColumnValue and compareFunction
+ * as NULL for them.
  */
 ShardInterval *
 FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
