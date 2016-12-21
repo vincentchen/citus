@@ -733,6 +733,8 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 	int64 affectedTupleCount = -1;
 	bool gotResults = false;
 	char *queryString = task->queryString;
+	ShardInterval *anchorShardInterval = LoadShardInterval(task->anchorShardId);
+	char targetRelationReplicationModel = ReplicationModel(anchorShardInterval->relationId);
 
 	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
 	{
@@ -756,6 +758,12 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 	/* prevent replicas of the same shard from diverging */
 	AcquireExecutorShardLock(task, operation);
 
+	if (targetRelationReplicationModel == REPLICATION_MODEL_2PC)
+	{
+		BeginOrContinueCoordinatedTransaction();
+		CoordinatedTransactionUse2PC();
+	}
+
 	/*
 	 * Try to run the query to completion on one placement. If the query fails
 	 * attempt the query on the next placement.
@@ -767,10 +775,19 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 		bool failOnError = false;
 		PGconn *connection = NULL;
 		int64 currentAffectedTupleCount = 0;
+		uint64 shardId = task->anchorShardId;
+		ShardInterval *anchorShardInterval = NULL;
 		int connectionFlags = SESSION_LIFESPAN;
 		MultiConnection *multiConnection = GetNodeConnection(connectionFlags,
 															 taskPlacement->nodeName,
 															 taskPlacement->nodePort);
+
+		if (targetRelationReplicationModel == REPLICATION_MODEL_2PC)
+		{
+			RemoteTransactionBeginIfNecessary(multiConnection);
+			MarkRemoteTransactionCritical(multiConnection);
+		}
+
 		if (PQstatus(multiConnection->pgConn) != CONNECTION_OK)
 		{
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
@@ -781,7 +798,7 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 			continue;
 		}
 
-		ManageShardIdParticipantForTransactionBlock(task->anchorShardId, multiConnection,
+		ManageShardIdParticipantForTransactionBlock(shardId, multiConnection,
 													isModificationQuery);
 
 		connection = multiConnection->pgConn;

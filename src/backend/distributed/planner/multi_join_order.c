@@ -1585,3 +1585,15 @@ PartitionMethod(Oid relationId)
 
 	return partitionMethod;
 }
+
+/* Returns the replication model for the given relation. */
+char
+ReplicationModel(Oid relationId)
+{
+	/* errors out if not a distributed table */
+	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
+
+	char replicationModel = partitionEntry->replicationModel;
+
+	return replicationModel;
+}
