@@ -178,6 +178,8 @@ SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
 \c - - - :master_port
+-- workaround for not trying to replicate reference tables
+UPDATE pg_dist_partition SET partmethod = 'x' WHERE partmethod = 'n';
 SELECT master_add_node('localhost', 5432);
         master_add_node         
 --------------------------------
@@ -201,6 +203,7 @@ SELECT master_remove_node('localhost', 5432);
  
 (1 row)
 
+UPDATE pg_dist_partition SET partmethod = 'n' WHERE partmethod = 'x';
 -- TRUNCATE
 \c - - - :worker_1_port
 TRUNCATE mx_table;

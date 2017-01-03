@@ -68,6 +68,7 @@ extern HTAB * GetWorkerNodeHash(void);
 /* relation oids */
 extern Oid DistColocationRelationId(void);
 extern Oid DistColocationConfigurationIndexId(void);
+extern Oid DistColocationColocationidIndexId(void);
 extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistShardPlacementRelationId(void);
@@ -77,6 +78,7 @@ extern Oid DistLocalGroupIdRelationId(void);
 /* index oids */
 extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
+extern Oid DistPartitionPartitionMethodIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardPlacementShardidIndexId(void);

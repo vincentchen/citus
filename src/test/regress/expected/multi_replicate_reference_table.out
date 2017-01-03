@@ -1,0 +1,326 @@
+--
+-- MULTI_REPLICATE_REFERENCE_TABLE
+--
+-- Tests that check the metadata returned by the master node.
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1370000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1370000;
+CREATE TABLE tmp_shard_placement(
+    shardid int8 NOT NULL,
+    shardstate int4 NOT NULL,
+    shardlength int8 NOT NULL,
+    nodename text NOT NULL,
+    nodeport int8 NOT NULL,
+    placementid bigint NOT NULL
+);
+-- remove a node for testing purposes
+INSERT INTO tmp_shard_placement (SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port);
+DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+-- test adding new node with no reference tables
+SELECT master_add_node('localhost', :worker_2_port);
+         master_add_node         
+---------------------------------
+ (3,3,localhost,57638,default,f)
+(1 row)
+
+-- verify nothing is replicated to the new node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+-- test adding new node with a reference table which does not have any healthy placement
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE replicate_reference_table_unhealthy(column1 int);
+SELECT create_reference_table('replicate_reference_table_unhealthy');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1370000;
+SELECT master_add_node('localhost', :worker_2_port);
+ERROR:  could not find any healthy placement for shard 1370000
+-- verify nothing is replicated to the new node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+DROP TABLE replicate_reference_table_unhealthy;
+-- test replicating a reference table when a new node added
+CREATE TABLE replicate_reference_table_valid(column1 int);
+SELECT create_reference_table('replicate_reference_table_valid');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- status before master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           37 |          1 |                 1 |                      0
+(1 row)
+
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating shard 1370001 to worker localhost:57638...
+         master_add_node         
+---------------------------------
+ (5,5,localhost,57638,default,f)
+(1 row)
+
+-- status after master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1370001 |          1 |           0 | localhost |    57638 |         393
+(1 row)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           37 |          1 |                 2 |                      0
+(1 row)
+
+DROP TABLE replicate_reference_table_valid;
+-- test replicating a reference table when a new node added in TRANSACTION + ROLLBACK
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE replicate_reference_table_rollback(column1 int);
+SELECT create_reference_table('replicate_reference_table_rollback');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- status before master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           38 |          1 |                 1 |                      0
+(1 row)
+
+BEGIN;
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating shard 1370002 to worker localhost:57638...
+         master_add_node         
+---------------------------------
+ (6,6,localhost,57638,default,f)
+(1 row)
+
+ROLLBACK;
+-- status after master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           38 |          1 |                 1 |                      0
+(1 row)
+
+DROP TABLE replicate_reference_table_rollback;
+-- test replicating a reference table when a new node added in TRANSACTION + COMMIT
+CREATE TABLE replicate_reference_table_commit(column1 int);
+SELECT create_reference_table('replicate_reference_table_commit');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- status before master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           39 |          1 |                 1 |                      0
+(1 row)
+
+BEGIN;
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating shard 1370003 to worker localhost:57638...
+         master_add_node         
+---------------------------------
+ (7,7,localhost,57638,default,f)
+(1 row)
+
+COMMIT;
+-- status after master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1370003 |          1 |           0 | localhost |    57638 |         397
+(1 row)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           39 |          1 |                 2 |                      0
+(1 row)
+
+DROP TABLE replicate_reference_table_commit;
+-- test adding new node + upgrading another hash distributed table to reference table + creating new reference table in TRANSACTION
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE replicate_reference_table_reference_one(column1 int);
+SELECT create_reference_table('replicate_reference_table_reference_one');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE replicate_reference_table_hash(column1 int);
+SELECT create_distributed_table('replicate_reference_table_hash', 'column1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE replicate_reference_table_reference_two(column1 int);
+-- status before master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           40 |          1 |                 1 |                      0
+(1 row)
+
+SELECT * FROM pg_dist_partition WHERE logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two');
+              logicalrelid               | partmethod |                                                        partkey                                                         | colocationid | repmodel 
+-----------------------------------------+------------+------------------------------------------------------------------------------------------------------------------------+--------------+----------
+ replicate_reference_table_reference_one | n          |                                                                                                                        |           40 | t
+ replicate_reference_table_hash          | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |           41 | s
+(2 rows)
+
+BEGIN;
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating shard 1370004 to worker localhost:57638...
+         master_add_node         
+---------------------------------
+ (8,8,localhost,57638,default,f)
+(1 row)
+
+SELECT upgrade_to_reference_table('replicate_reference_table_hash');
+NOTICE:  Replicating shard 1370005 to worker localhost:57638...
+ upgrade_to_reference_table 
+----------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('replicate_reference_table_reference_two');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+COMMIT;
+-- status after master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1370004 |          1 |           0 | localhost |    57638 |         400
+ 1370005 |          1 |           0 | localhost |    57638 |         401
+ 1370006 |          1 |           0 | localhost |    57638 |         403
+(3 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+           40 |          1 |                 2 |                      0
+(1 row)
+
+SELECT * FROM pg_dist_partition WHERE logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two');
+              logicalrelid               | partmethod | partkey | colocationid | repmodel 
+-----------------------------------------+------------+---------+--------------+----------
+ replicate_reference_table_reference_one | n          |         |           40 | t
+ replicate_reference_table_hash          | n          |         |           40 | t
+ replicate_reference_table_reference_two | n          |         |           40 | t
+(3 rows)
+
+DROP TABLE replicate_reference_table_reference_one;
+DROP TABLE replicate_reference_table_hash;
+DROP TABLE replicate_reference_table_reference_two;
+-- reload pg_dist_shard_placement table
+INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
+DROP TABLE tmp_shard_placement;

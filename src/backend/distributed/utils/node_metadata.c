@@ -30,6 +30,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -81,6 +82,14 @@ master_add_node(PG_FUNCTION_ARGS)
 
 	Datum returnData = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
 									   hasMetadata);
+
+	/*
+	 * After adding new node, we also replicate all existing reference tables to the new
+	 * node. ReplicateAllReferenceTablesToAllNodes replicates reference tables to all
+	 * nodes however, it skips nodes which already has healthy placement of particular
+	 * reference table.
+	 */
+	ReplicateAllReferenceTablesToAllNodes();
 
 	PG_RETURN_CSTRING(returnData);
 }

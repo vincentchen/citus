@@ -13,9 +13,12 @@
 #include "miscadmin.h"
 
 #include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/genam.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/reference_table_utils.h"
@@ -23,14 +26,16 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/rel.h"
 
 
 /* local function forward declarations */
 static void ReplicateSingleShardTableToAllWorkers(Oid relationId);
 static void ReplicateShardToAllWorkers(ShardInterval *shardInterval);
 static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
-
+static List * ReferenceTableList(void);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -90,6 +95,65 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	ReplicateSingleShardTableToAllWorkers(relationId);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * ReplicateAllReferenceTablesToAllNodes function finds all reference tables and
+ * replicates them to all worker nodes. It also modifies pg_dist_colocation table to
+ * update the replication factor column. This function skips a worker node if that node
+ * already has healthy placement of a particular reference table to prevent unnecessary
+ * data transfer.
+ */
+void
+ReplicateAllReferenceTablesToAllNodes()
+{
+	List *referenceTableList = ReferenceTableList();
+	ListCell *referenceTableCell = NULL;
+
+	/* we do not use pgDistNode, we only obtain a lock on it to prevent modifications */
+	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+
+	List *workerNodeList = WorkerNodeList();
+	int workerCount = list_length(workerNodeList);
+
+	uint32 currentColocationId = INVALID_COLOCATION_ID;
+
+	foreach(referenceTableCell, referenceTableList)
+	{
+		Oid referenceTableId = lfirst_oid(referenceTableCell);
+		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		uint64 shardId = shardInterval->shardId;
+
+		LockShardDistributionMetadata(shardId, ExclusiveLock);
+		LockShardResource(shardId, ExclusiveLock);
+
+		ReplicateShardToAllWorkers(shardInterval);
+
+		/* we have this check to prevent accessing to cache multiple times */
+		if (currentColocationId == INVALID_COLOCATION_ID)
+		{
+			/*
+			 * We use TableColocationId function to find colocation id of reference tables
+			 * instead of ColocationId function, because we do not know replication
+			 * factor. It is not necessarily equal to worker count at this point.
+			 */
+			currentColocationId = TableColocationId(referenceTableId);
+		}
+	}
+
+	/*
+	 * After replicating reference tables, we will update replication factor column for
+	 * colocation group of reference tables so that worker count will be equal to
+	 * replication factor again.
+	 */
+	if (currentColocationId != INVALID_COLOCATION_ID)
+	{
+		UpdateColocationGroupReplicationFactor(currentColocationId, workerCount);
+	}
+
+	heap_close(pgDistNode, NoLock);
 }
 
 
@@ -176,8 +240,11 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 		ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																	 nodeName, nodePort,
 																	 missingWorkerOk);
+
 		if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 		{
+			ereport(NOTICE, (errmsg("Replicating shard " UINT64_FORMAT
+									" to worker %s:%d...", shardId, nodeName, nodePort)));
 			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
 													   ddlCommandList);
 			if (targetPlacement == NULL)
@@ -249,4 +316,49 @@ CreateReferenceTableColocationId()
 	}
 
 	return colocationId;
+}
+
+
+/*
+ * ReferenceTableList function scans pg_dist_partition to create a list of all reference
+ * tables. To create the list, it performs index scan.
+ */
+static List *
+ReferenceTableList()
+{
+	List *referenceTableList = NIL;
+	Relation pgDistPartition = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	HeapTuple heapTuple = NULL;
+	bool indexOK = true;
+	int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	char partitionMethod = DISTRIBUTE_BY_NONE;
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_partmethod, BTEqualStrategyNumber,
+				F_CHAREQ, CharGetDatum(partitionMethod));
+
+	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	tupleDescriptor = RelationGetDescr(pgDistPartition);
+	scanDescriptor = systable_beginscan(pgDistPartition,
+										DistPartitionPartitionMethodIndexId(), indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		bool isNull = false;
+		Oid referenceTableId = heap_getattr(heapTuple,
+											Anum_pg_dist_partition_logicalrelid,
+											tupleDescriptor, &isNull);
+
+		referenceTableList = lappend_oid(referenceTableList, referenceTableId);
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistPartition, AccessShareLock);
+
+	return referenceTableList;
 }

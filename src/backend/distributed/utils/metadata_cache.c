@@ -58,9 +58,11 @@ static Oid distNodeRelationId = InvalidOid;
 static Oid distLocalGroupRelationId = InvalidOid;
 static Oid distColocationRelationId = InvalidOid;
 static Oid distColocationConfigurationIndexId = InvalidOid;
+static Oid distColocationColocationidIndexId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
 static Oid distPartitionColocationidIndexId = InvalidOid;
+static Oid distPartitionPartitionMethodIndexId = InvalidOid;
 static Oid distShardLogicalRelidIndexId = InvalidOid;
 static Oid distShardShardidIndexId = InvalidOid;
 static Oid distShardPlacementShardidIndexId = InvalidOid;
@@ -762,6 +764,17 @@ DistColocationConfigurationIndexId(void)
 }
 
 
+/* return oid of pg_dist_colocation_pkey index */
+Oid
+DistColocationColocationidIndexId(void)
+{
+	CachedRelationLookup("pg_dist_colocation_pkey",
+						 &distColocationColocationidIndexId);
+
+	return distColocationColocationidIndexId;
+}
+
+
 /* return oid of pg_dist_partition relation */
 Oid
 DistPartitionRelationId(void)
@@ -791,6 +804,17 @@ DistPartitionColocationidIndexId(void)
 						 &distPartitionColocationidIndexId);
 
 	return distPartitionColocationidIndexId;
+}
+
+
+/* return oid of pg_dist_partition_partmethod_index index */
+Oid
+DistPartitionPartitionMethodIndexId(void)
+{
+	CachedRelationLookup("pg_dist_partition_partmethod_index",
+						 &distPartitionPartitionMethodIndexId);
+
+	return distPartitionPartitionMethodIndexId;
 }
 
 
@@ -1565,8 +1589,10 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distNodeRelationId = InvalidOid;
 		distColocationRelationId = InvalidOid;
 		distColocationConfigurationIndexId = InvalidOid;
+		distColocationColocationidIndexId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
+		distPartitionPartitionMethodIndexId = InvalidOid;
 		distPartitionColocationidIndexId = InvalidOid;
 		distShardLogicalRelidIndexId = InvalidOid;
 		distShardShardidIndexId = InvalidOid;

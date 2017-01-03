@@ -94,11 +94,14 @@ SELECT master_apply_delete_command('DELETE FROM mx_table');
 SELECT count(*) FROM mx_table;
 
 -- master_add_node
+
 SELECT master_add_node('localhost', 5432);
 SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
 \c - - - :master_port
+-- workaround for not trying to replicate reference tables
+UPDATE pg_dist_partition SET partmethod = 'x' WHERE partmethod = 'n';
 SELECT master_add_node('localhost', 5432);
 
 \c - - - :worker_1_port
@@ -107,6 +110,8 @@ SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 \c - - - :master_port
 SELECT master_remove_node('localhost', 5432);
+
+UPDATE pg_dist_partition SET partmethod = 'n' WHERE partmethod = 'x';
 
 -- TRUNCATE
 \c - - - :worker_1_port
