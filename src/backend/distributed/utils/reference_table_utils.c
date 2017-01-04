@@ -280,17 +280,23 @@ ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
 	text *shardMinValue = NULL;
 	text *shardMaxValue = NULL;
 
+
+	DeleteShardRow(shardId);
+	InsertShardRow(relationId, shardId, shardStorageType, shardMinValue, shardMaxValue);
+
+
 	/* delete old metadata rows */
 	DeletePartitionRow(relationId);
+
+	DeleteColocationGroupIfNoTablesBelong(currentColocationId);
+
+
 	/* insert new metadata rows */
 	InsertIntoPgDistPartition(relationId, DISTRIBUTE_BY_NONE, distributionColumn,
 							  newColocationId, REPLICATION_MODEL_2PC);
 
 
-	DeleteColocationGroupIfNoTablesBelong(currentColocationId);
 
-	DeleteShardRow(shardId);
-	InsertShardRow(relationId, shardId, shardStorageType, shardMinValue, shardMaxValue);
 }
 
 
