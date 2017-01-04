@@ -7,7 +7,6 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1370000;
 
-
 CREATE TABLE tmp_shard_placement(
     shardid int8 NOT NULL,
     shardstate int4 NOT NULL,
@@ -176,7 +175,79 @@ DROP TABLE replicate_reference_table_hash;
 DROP TABLE replicate_reference_table_reference_two;
 
 
--- reload pg_dist_shard_placement table
+-- test inserting a value then adding a new node in a transaction
+SELECT master_remove_node('localhost', :worker_2_port);
 
+CREATE TABLE replicate_reference_table_insert(column1 int);
+SELECT create_reference_table('replicate_reference_table_insert');
+
+BEGIN;
+INSERT INTO replicate_reference_table_insert VALUES(1);
+SELECT master_add_node('localhost', :worker_2_port);
+ROLLBACK;
+
+DROP TABLE replicate_reference_table_insert;
+
+
+-- test COPY then adding a new node in a transaction
+CREATE TABLE replicate_reference_table_copy(column1 int);
+SELECT create_reference_table('replicate_reference_table_copy');
+
+BEGIN;
+COPY replicate_reference_table_copy FROM STDIN;
+1
+2
+3
+4
+5
+\.
+SELECT master_add_node('localhost', :worker_2_port);
+ROLLBACK;
+
+DROP TABLE replicate_reference_table_copy;
+
+
+-- test executing DDL command then adding a new node in a transaction
+CREATE TABLE replicate_reference_table_ddl(column1 int);
+SELECT create_reference_table('replicate_reference_table_ddl');
+
+BEGIN;
+ALTER TABLE replicate_reference_table_ddl ADD column2 int;
+SELECT master_add_node('localhost', :worker_2_port);
+ROLLBACK;
+
+DROP TABLE replicate_reference_table_ddl;
+
+
+-- test adding a node while there is a reference table at another schema
+CREATE SCHEMA replicate_reference_table_schema;
+CREATE TABLE replicate_reference_table_schema.table1(column1 int);
+SELECT create_reference_table('replicate_reference_table_schema.table1');
+
+-- status before master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
+
+SELECT master_add_node('localhost', :worker_2_port);
+
+-- status after master_add_node
+SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
+
+DROP TABLE replicate_reference_table_schema.table1;
+DROP SCHEMA replicate_reference_table_schema CASCADE;
+
+
+-- reload pg_dist_shard_placement table
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
 DROP TABLE tmp_shard_placement;

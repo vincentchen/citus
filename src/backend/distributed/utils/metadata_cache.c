@@ -811,8 +811,13 @@ DistPartitionColocationidIndexId(void)
 Oid
 DistPartitionPartitionMethodIndexId(void)
 {
-	CachedRelationLookup("pg_dist_partition_partmethod_index",
-						 &distPartitionPartitionMethodIndexId);
+	const char *relationName = "pg_dist_partition_partmethod_index";
+
+	if (distPartitionPartitionMethodIndexId == InvalidOid)
+	{
+		distPartitionPartitionMethodIndexId = get_relname_relid(relationName,
+																PG_CATALOG_NAMESPACE);
+	}
 
 	return distPartitionPartitionMethodIndexId;
 }

@@ -83,7 +83,7 @@ SELECT create_distributed_table('upgrade_reference_table_composite', 'column1');
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_composite');
-NOTICE:  Replicating shard 1360007 to worker localhost:57638...
+NOTICE:  Replicating reference table "upgrade_reference_table_composite" to worker localhost:57638...
 ERROR:  type "public.upgrade_test_composite_type" does not exist
 CONTEXT:  while executing command on localhost:57638
 -- test with reference table
@@ -151,7 +151,7 @@ WHERE shardid IN
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_append');
-NOTICE:  Replicating shard 1360009 to worker localhost:57638...
+NOTICE:  Replicating reference table "upgrade_reference_table_append" to worker localhost:57638...
  upgrade_to_reference_table 
 ----------------------------
  
@@ -257,7 +257,7 @@ WHERE shardid IN
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_worker');
-NOTICE:  Replicating shard 1360010 to worker localhost:57638...
+NOTICE:  Replicating reference table "upgrade_reference_table_one_worker" to worker localhost:57638...
  upgrade_to_reference_table 
 ----------------------------
  
@@ -579,7 +579,7 @@ WHERE shardid IN
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_rollback');
-NOTICE:  Replicating shard 1360013 to worker localhost:57638...
+NOTICE:  Replicating reference table "upgrade_reference_table_transaction_rollback" to worker localhost:57638...
  upgrade_to_reference_table 
 ----------------------------
  
@@ -687,7 +687,7 @@ WHERE shardid IN
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_commit');
-NOTICE:  Replicating shard 1360014 to worker localhost:57638...
+NOTICE:  Replicating reference table "upgrade_reference_table_transaction_commit" to worker localhost:57638...
  upgrade_to_reference_table 
 ----------------------------
  

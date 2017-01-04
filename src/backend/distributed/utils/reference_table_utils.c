@@ -127,7 +127,6 @@ ReplicateAllReferenceTablesToAllNodes()
 		uint64 shardId = shardInterval->shardId;
 
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
-		LockShardResource(shardId, ExclusiveLock);
 
 		ReplicateShardToAllWorkers(shardInterval);
 
@@ -243,8 +242,10 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 
 		if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 		{
-			ereport(NOTICE, (errmsg("Replicating shard " UINT64_FORMAT
-									" to worker %s:%d...", shardId, nodeName, nodePort)));
+			char *relationName = get_rel_name(shardInterval->relationId);
+			ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to worker "
+									"%s:%d...", relationName, nodeName, nodePort)));
+
 			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
 													   ddlCommandList);
 			if (targetPlacement == NULL)
