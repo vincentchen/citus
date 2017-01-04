@@ -285,7 +285,7 @@ ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
 	DeletePartitionRow(relationId);
 
 
-	DeleteColocationGroupIfNoTablesBelong(currentColocationId);
+	//DeleteColocationGroupIfNoTablesBelong(currentColocationId);
 
 
 	/* insert new metadata rows */
