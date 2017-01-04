@@ -327,39 +327,23 @@ CreateReferenceTableColocationId()
 static List *
 ReferenceTableList()
 {
+	List *distTableOidList = DistTableOidList();
+	ListCell *distTableOidCell = NULL;
+
 	List *referenceTableList = NIL;
-	Relation pgDistPartition = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
-	bool indexOK = true;
-	int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-	char partitionMethod = DISTRIBUTE_BY_NONE;
 
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_partmethod, BTEqualStrategyNumber,
-				F_CHAREQ, CharGetDatum(partitionMethod));
-
-	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
-	tupleDescriptor = RelationGetDescr(pgDistPartition);
-	scanDescriptor = systable_beginscan(pgDistPartition,
-										DistPartitionPartitionMethodIndexId(), indexOK,
-										NULL, scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	foreach(distTableOidCell, distTableOidList)
 	{
-		bool isNull = false;
-		Oid referenceTableId = heap_getattr(heapTuple,
-											Anum_pg_dist_partition_logicalrelid,
-											tupleDescriptor, &isNull);
+		DistTableCacheEntry *cacheEntry = NULL;
+		Oid relationId = lfirst_oid(distTableOidCell);
 
-		referenceTableList = lappend_oid(referenceTableList, referenceTableId);
-		heapTuple = systable_getnext(scanDescriptor);
+		cacheEntry = DistributedTableCacheEntry(relationId);
+
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			referenceTableList = lappend_oid(referenceTableList, relationId);
+		}
 	}
-
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
 
 	return referenceTableList;
 }

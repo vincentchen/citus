@@ -62,7 +62,6 @@ static Oid distColocationColocationidIndexId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
 static Oid distPartitionColocationidIndexId = InvalidOid;
-static Oid distPartitionPartitionMethodIndexId = InvalidOid;
 static Oid distShardLogicalRelidIndexId = InvalidOid;
 static Oid distShardShardidIndexId = InvalidOid;
 static Oid distShardPlacementShardidIndexId = InvalidOid;
@@ -107,7 +106,6 @@ static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
-static List * DistTableOidList(void);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
@@ -804,22 +802,6 @@ DistPartitionColocationidIndexId(void)
 						 &distPartitionColocationidIndexId);
 
 	return distPartitionColocationidIndexId;
-}
-
-
-/* return oid of pg_dist_partition_partmethod_index index */
-Oid
-DistPartitionPartitionMethodIndexId(void)
-{
-	const char *relationName = "pg_dist_partition_partmethod_index";
-
-	if (distPartitionPartitionMethodIndexId == InvalidOid)
-	{
-		distPartitionPartitionMethodIndexId = get_relname_relid(relationName,
-																PG_CATALOG_NAMESPACE);
-	}
-
-	return distPartitionPartitionMethodIndexId;
 }
 
 
@@ -1597,7 +1579,6 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distColocationColocationidIndexId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
-		distPartitionPartitionMethodIndexId = InvalidOid;
 		distPartitionColocationidIndexId = InvalidOid;
 		distShardLogicalRelidIndexId = InvalidOid;
 		distShardShardidIndexId = InvalidOid;
@@ -1614,7 +1595,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
  * DistTableOidList iterates over the pg_dist_partition table and returns
  * a list that consists of the logicalrelids.
  */
-static List *
+List *
 DistTableOidList(void)
 {
 	SysScanDesc scanDescriptor = NULL;
