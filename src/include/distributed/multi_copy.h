@@ -13,7 +13,11 @@
 #define MULTI_COPY_H
 
 
+#include "distributed/master_metadata_utility.h"
+#include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
+#include "tcop/dest.h"
+
 
 /*
  * A smaller version of copy.c's CopyStateData, trimmed to the elements
@@ -42,6 +46,51 @@ typedef struct NodeAddress
 	char *nodeName;
 	int32 nodePort;
 } NodeAddress;
+
+/* CopyDestReceiver can be used to stream results into a distributed table */
+typedef struct CitusCopyDestReceiver
+{
+	DestReceiver pub;
+
+	/* relation and columns to which to copy */
+	Oid distributedRelationId;
+	List *columnNameList;
+
+	/* EState for per-tuple memory allocation */
+	EState *executorState;
+
+	/* MemoryContext for DestReceiver session */
+	MemoryContext memoryContext;
+
+	/* distributed relation details */
+	Relation distributedRelation;
+	char partitionMethod;
+	int partitionColumnIndex;
+
+	/* descriptor of the tuples that are sent to the worker */
+	TupleDesc tupleDescriptor;
+
+	/* template for COPY statement to send to workers */
+	CopyStmt *copyStatement;
+
+	/* cached shard metadata for pruning */
+	int shardCount;
+	ShardInterval **shardIntervalCache;
+	bool useBinarySearch;
+	FmgrInfo *hashFunction;
+	FmgrInfo *compareFunction;
+
+	/* cached shard metadata for pruning */
+	HTAB *copyConnectionHash;
+
+	/* state on how to copy out data types */
+	CopyOutState copyOutState;
+	FmgrInfo *columnOutputFunctions;
+} CitusCopyDestReceiver;
+
+extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
+														   List *columnNameList,
+														   EState *executorState);
 
 
 /* function declarations for copying into a distributed table */
