@@ -1164,6 +1164,7 @@ SendCopyDataToAll(StringInfo dataBuffer, int64 shardId, List *connectionList)
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		SendCopyDataToPlacement(dataBuffer, shardId, connection);
 	}
+
 }
 
 
