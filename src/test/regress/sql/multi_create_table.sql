@@ -60,18 +60,6 @@ CREATE TABLE nation (
 	n_regionkey integer not null,
 	n_comment varchar(152));
 
-\COPY nation FROM STDIN WITH CSV
-1,'name',1,'comment_1'
-2,'name',2,'comment_2'
-3,'name',3,'comment_3'
-4,'name',4,'comment_4'
-5,'name',5,'comment_5'
-\.
-
-SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
-
-TRUNCATE nation;
-
 SELECT create_reference_table('nation');
 
 CREATE TABLE part (
@@ -141,6 +129,25 @@ CREATE TABLE mx_table_test (col1 int, col2 text);
 SELECT create_distributed_table('mx_table_test', 'col1');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
 DROP TABLE mx_table_test; 
+
+-- Test initial data loading
+CREATE TABLE data_load_test (col1 int, col2 text);
+INSERT INTO data_load_test VALUES (132, 'hello');
+INSERT INTO data_load_test VALUES (243, 'world');
+
+-- create_distributed_table copies data into the distributed table
+SELECT create_distributed_table('data_load_test', 'col1');
+SELECT * FROM data_load_test;
+DROP TABLE data_load_test;
+
+-- Test data loading after dropping a column
+CREATE TABLE data_load_test (col1 int, col2 text, col3 text);
+INSERT INTO data_load_test VALUES (132, 'hello', 'world');
+INSERT INTO data_load_test VALUES (243, 'world', 'hello');
+ALTER TABLE data_load_test DROP COLUMN col2;
+SELECT create_distributed_table('data_load_test', 'col1');
+SELECT * FROM data_load_test;
+DROP TABLE data_load_test;
 
 SET citus.shard_replication_factor TO default;
 
