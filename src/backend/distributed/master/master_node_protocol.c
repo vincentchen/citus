@@ -637,6 +637,28 @@ List *
 GetTableDDLEvents(Oid relationId)
 {
 	List *tableDDLEventList = NIL;
+	List *tableCreationCommandList = NIL;
+	List *indexAndConstraintCommandList = NIL;
+
+	tableCreationCommandList = GetTableCreationCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, tableCreationCommandList);
+
+	indexAndConstraintCommandList = GetTableIndexAndConstraintCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
+
+	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableCreationCommands takes in a relationId, and returns the list of DDL
+ * commands needed to reconstruct the relation, excluding indexes and
+ * constraints.
+ */
+List *
+GetTableCreationCommands(Oid relationId)
+{
+	List *tableDDLEventList = NIL;
 	char tableType = 0;
 	List *sequenceIdlist = getOwnedSequences(relationId);
 	ListCell *sequenceIdCell;
@@ -644,12 +666,6 @@ GetTableDDLEvents(Oid relationId)
 	char *tableColumnOptionsDef = NULL;
 	char *createSchemaCommand = NULL;
 	Oid schemaId = InvalidOid;
-
-	Relation pgIndex = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -701,6 +717,37 @@ GetTableDDLEvents(Oid relationId)
 	{
 		tableDDLEventList = lappend(tableDDLEventList, tableColumnOptionsDef);
 	}
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableIndexAndConstraintCommands returns the list of DDL commands to
+ * (re)create indexes and constraints for a given table.
+ */
+List *
+GetTableIndexAndConstraintCommands(Oid relationId)
+{
+	List *indexDDLEventList = NIL;
+	Relation pgIndex = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
 
 	/* open system catalog and scan all indexes that belong to this table */
 	pgIndex = heap_open(IndexRelationId, AccessShareLock);
@@ -754,7 +801,7 @@ GetTableDDLEvents(Oid relationId)
 		}
 
 		/* append found constraint or index definition to the list */
-		tableDDLEventList = lappend(tableDDLEventList, statementDef);
+		indexDDLEventList = lappend(indexDDLEventList, statementDef);
 
 		/* if table is clustered on this index, append definition to the list */
 		if (indexForm->indisclustered)
@@ -762,7 +809,7 @@ GetTableDDLEvents(Oid relationId)
 			char *clusteredDef = pg_get_indexclusterdef_string(indexId);
 			Assert(clusteredDef != NULL);
 
-			tableDDLEventList = lappend(tableDDLEventList, clusteredDef);
+			indexDDLEventList = lappend(indexDDLEventList, clusteredDef);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -775,7 +822,7 @@ GetTableDDLEvents(Oid relationId)
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	return tableDDLEventList;
+	return indexDDLEventList;
 }
 
 

@@ -101,6 +101,8 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
+extern List * GetTableCreationCommands(Oid relationId);
+extern List * GetTableIndexAndConstraintCommands(Oid relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);
 extern char ShardStorageType(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
