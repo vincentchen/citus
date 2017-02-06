@@ -739,6 +739,7 @@ LIMIT
 
 -- Same queries above with explain
 -- Simple join subquery pushdown
+SET citus.enable_unique_job_ids TO off;
 EXPLAIN SELECT
 	avg(array_length(events, 1)) AS event_average
 FROM
@@ -766,7 +767,7 @@ FROM
 		user_id) AS subquery;
                                                                                        QUERY PLAN                                                                                       
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Distributed Query into pg_merge_job_270014
+ Distributed Query into pg_merge_job_0005
    Executor: Real-Time
    Task Count: 2
    Tasks Shown: One of 2
@@ -787,7 +788,7 @@ FROM
                                        Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
  Master Query
    ->  Aggregate  (cost=0.01..0.02 rows=1 width=0)
-         ->  Seq Scan on pg_merge_job_270014  (cost=0.00..0.00 rows=0 width=0)
+         ->  Seq Scan on pg_merge_job_0005  (cost=0.00..0.00 rows=0 width=0)
 (22 rows)
 
 -- Union and left join subquery pushdown
@@ -855,7 +856,7 @@ GROUP BY
 	hasdone;
                                                                                                                    QUERY PLAN                                                                                                                    
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Distributed Query into pg_merge_job_270015
+ Distributed Query into pg_merge_job_0006
    Executor: Real-Time
    Task Count: 2
    Tasks Shown: One of 2
@@ -893,8 +894,8 @@ GROUP BY
                                                          Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
  Master Query
    ->  HashAggregate  (cost=0.00..0.18 rows=10 width=0)
-         Group Key: intermediate_column_270015_2
-         ->  Seq Scan on pg_merge_job_270015  (cost=0.00..0.00 rows=0 width=0)
+         Group Key: intermediate_column_6_2
+         ->  Seq Scan on pg_merge_job_0006  (cost=0.00..0.00 rows=0 width=0)
 (40 rows)
 
 -- Union, left join and having subquery pushdown
@@ -1021,7 +1022,7 @@ LIMIT
 	10;
                                                                                                 QUERY PLAN                                                                                                
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Distributed Query into pg_merge_job_270017
+ Distributed Query into pg_merge_job_0008
    Executor: Real-Time
    Task Count: 2
    Tasks Shown: One of 2
@@ -1048,8 +1049,8 @@ LIMIT
  Master Query
    ->  Limit  (cost=0.01..0.02 rows=0 width=0)
          ->  Sort  (cost=0.01..0.02 rows=0 width=0)
-               Sort Key: intermediate_column_270017_2 DESC
-               ->  Seq Scan on pg_merge_job_270017  (cost=0.00..0.00 rows=0 width=0)
+               Sort Key: intermediate_column_8_2 DESC
+               ->  Seq Scan on pg_merge_job_0008  (cost=0.00..0.00 rows=0 width=0)
 (29 rows)
 
 SET citus.enable_router_execution TO 'true';

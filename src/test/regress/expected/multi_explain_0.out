@@ -13,6 +13,7 @@ SELECT substring(version(), '\d+\.\d+') AS major_version;
 \a\t
 SET citus.task_executor_type TO 'real-time';
 SET citus.explain_distributed_queries TO on;
+SET citus.enable_unique_job_ids TO off;
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
@@ -39,7 +40,7 @@ $BODY$ LANGUAGE plpgsql;
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
-Distributed Query into pg_merge_job_570000
+Distributed Query into pg_merge_job_0001
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -50,10 +51,10 @@ Distributed Query into pg_merge_job_570000
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Sort
-        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_570000_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570000_0
+        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_1_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_1_0
         ->  HashAggregate
-              Group Key: intermediate_column_570000_0
-              ->  Seq Scan on pg_merge_job_570000
+              Group Key: intermediate_column_1_0
+              ->  Seq Scan on pg_merge_job_0001
 -- Test JSON format
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
@@ -94,19 +95,19 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       {
         "Plan": {
           "Node Type": "Sort",
-          "Sort Key": ["COALESCE((sum((COALESCE((sum(intermediate_column_570001_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "intermediate_column_570001_0"],
+          "Sort Key": ["COALESCE((sum((COALESCE((sum(intermediate_column_2_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "intermediate_column_2_0"],
           "Plans": [
             {
               "Node Type": "Aggregate",
               "Strategy": "Hashed",
               "Parent Relationship": "Outer",
-              "Group Key": ["intermediate_column_570001_0"],
+              "Group Key": ["intermediate_column_2_0"],
               "Plans": [
                 {
                   "Node Type": "Seq Scan",
                   "Parent Relationship": "Outer",
-                  "Relation Name": "pg_merge_job_570001",
-                  "Alias": "pg_merge_job_570001"
+                  "Relation Name": "pg_merge_job_0002",
+                  "Alias": "pg_merge_job_0002"
                 }
               ]
             }
@@ -163,8 +164,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
         <Plan>
           <Node-Type>Sort</Node-Type>
           <Sort-Key>
-            <Item>COALESCE((sum((COALESCE((sum(intermediate_column_570003_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
-            <Item>intermediate_column_570003_0</Item>
+            <Item>COALESCE((sum((COALESCE((sum(intermediate_column_4_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
+            <Item>intermediate_column_4_0</Item>
           </Sort-Key>
           <Plans>
             <Plan>
@@ -172,14 +173,14 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
               <Strategy>Hashed</Strategy>
               <Parent-Relationship>Outer</Parent-Relationship>
               <Group-Key>
-                <Item>intermediate_column_570003_0</Item>
+                <Item>intermediate_column_4_0</Item>
               </Group-Key>
               <Plans>
                 <Plan>
                   <Node-Type>Seq Scan</Node-Type>
                   <Parent-Relationship>Outer</Parent-Relationship>
-                  <Relation-Name>pg_merge_job_570003</Relation-Name>
-                  <Alias>pg_merge_job_570003</Alias>
+                  <Relation-Name>pg_merge_job_0004</Relation-Name>
+                  <Alias>pg_merge_job_0004</Alias>
                 </Plan>
               </Plans>
             </Plan>
@@ -220,24 +221,24 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     - Plan: 
         Node Type: "Sort"
         Sort Key: 
-          - "COALESCE((sum((COALESCE((sum(intermediate_column_570005_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
-          - "intermediate_column_570005_0"
+          - "COALESCE((sum((COALESCE((sum(intermediate_column_6_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
+          - "intermediate_column_6_0"
         Plans: 
           - Node Type: "Aggregate"
             Strategy: "Hashed"
             Parent Relationship: "Outer"
             Group Key: 
-              - "intermediate_column_570005_0"
+              - "intermediate_column_6_0"
             Plans: 
               - Node Type: "Seq Scan"
                 Parent Relationship: "Outer"
-                Relation Name: "pg_merge_job_570005"
-                Alias: "pg_merge_job_570005"
+                Relation Name: "pg_merge_job_0006"
+                Alias: "pg_merge_job_0006"
 -- Test Text format
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
-Distributed Query into pg_merge_job_570006
+Distributed Query into pg_merge_job_0007
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -248,14 +249,14 @@ Distributed Query into pg_merge_job_570006
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Sort
-        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_570006_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570006_0
+        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_7_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_7_0
         ->  HashAggregate
-              Group Key: intermediate_column_570006_0
-              ->  Seq Scan on pg_merge_job_570006
+              Group Key: intermediate_column_7_0
+              ->  Seq Scan on pg_merge_job_0007
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
-Distributed Query into pg_merge_job_570007
+Distributed Query into pg_merge_job_0008
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -267,15 +268,15 @@ Distributed Query into pg_merge_job_570007
                     Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 Master Query
   ->  Aggregate
-        Output: (sum(intermediate_column_570007_0) / (sum(intermediate_column_570007_1) / sum(intermediate_column_570007_2)))
-        ->  Seq Scan on pg_temp_2.pg_merge_job_570007
-              Output: intermediate_column_570007_0, intermediate_column_570007_1, intermediate_column_570007_2
+        Output: (sum(intermediate_column_8_0) / (sum(intermediate_column_8_1) / sum(intermediate_column_8_2)))
+        ->  Seq Scan on pg_temp_2.pg_merge_job_0008
+              Output: intermediate_column_8_0, intermediate_column_8_1, intermediate_column_8_2
 -- Test join
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM lineitem
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
-Distributed Query into pg_merge_job_570008
+Distributed Query into pg_merge_job_0009
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -293,8 +294,8 @@ Distributed Query into pg_merge_job_570008
 Master Query
   ->  Limit
         ->  Sort
-              Sort Key: intermediate_column_570008_4
-              ->  Seq Scan on pg_merge_job_570008
+              Sort Key: intermediate_column_9_4
+              ->  Seq Scan on pg_merge_job_0009
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES(1,0);
@@ -342,7 +343,7 @@ Distributed Query
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-Distributed Query into pg_merge_job_570009
+Distributed Query into pg_merge_job_0010
   Executor: Router
   Task Count: 1
   Tasks Shown: All
@@ -362,7 +363,7 @@ t
 EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
-Distributed Query into pg_merge_job_570012
+Distributed Query into pg_merge_job_0013
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -370,12 +371,12 @@ Distributed Query into pg_merge_job_570012
         Node: host=localhost port=57637 dbname=regression
         ->  Seq Scan on lineitem_290001 lineitem
 Master Query
-  ->  Seq Scan on pg_merge_job_570012
+  ->  Seq Scan on pg_merge_job_0013
 -- Test having
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem
 	HAVING sum(l_quantity) > 100;
-Distributed Query into pg_merge_job_570013
+Distributed Query into pg_merge_job_0014
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -387,16 +388,16 @@ Distributed Query into pg_merge_job_570013
                     Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 Master Query
   ->  Aggregate
-        Output: (sum(intermediate_column_570013_0) / (sum(intermediate_column_570013_1) / sum(intermediate_column_570013_2)))
-        Filter: (sum(pg_merge_job_570013.intermediate_column_570013_3) > '100'::numeric)
-        ->  Seq Scan on pg_temp_2.pg_merge_job_570013
-              Output: intermediate_column_570013_0, intermediate_column_570013_1, intermediate_column_570013_2, intermediate_column_570013_3
+        Output: (sum(intermediate_column_14_0) / (sum(intermediate_column_14_1) / sum(intermediate_column_14_2)))
+        Filter: (sum(pg_merge_job_0014.intermediate_column_14_3) > '100'::numeric)
+        ->  Seq Scan on pg_temp_2.pg_merge_job_0014
+              Output: intermediate_column_14_0, intermediate_column_14_1, intermediate_column_14_2, intermediate_column_14_3
 -- Test having without aggregate
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT l_quantity FROM lineitem
 	GROUP BY l_quantity
 	HAVING l_quantity > (100 * random());
-Distributed Query into pg_merge_job_570014
+Distributed Query into pg_merge_job_0015
   Executor: Real-Time
   Task Count: 8
   Tasks Shown: One of 8
@@ -409,16 +410,16 @@ Distributed Query into pg_merge_job_570014
                     Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 Master Query
   ->  HashAggregate
-        Output: intermediate_column_570014_0
-        Group Key: pg_merge_job_570014.intermediate_column_570014_0
-        Filter: ((pg_merge_job_570014.intermediate_column_570014_1)::double precision > ('100'::double precision * random()))
-        ->  Seq Scan on pg_temp_2.pg_merge_job_570014
-              Output: intermediate_column_570014_0, intermediate_column_570014_1
+        Output: intermediate_column_15_0
+        Group Key: pg_merge_job_0015.intermediate_column_15_0
+        Filter: ((pg_merge_job_0015.intermediate_column_15_1)::double precision > ('100'::double precision * random()))
+        ->  Seq Scan on pg_temp_2.pg_merge_job_0015
+              Output: intermediate_column_15_0, intermediate_column_15_1
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-Distributed Query into pg_merge_job_570015
+Distributed Query into pg_merge_job_0016
   Executor: Real-Time
   Task Count: 4
   Tasks Shown: All
@@ -444,7 +445,7 @@ Distributed Query into pg_merge_job_570015
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570015
+        ->  Seq Scan on pg_merge_job_0016
 SELECT true AS valid FROM explain_xml($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
 t
@@ -456,7 +457,7 @@ SET citus.task_executor_type TO 'task-tracker';
 SET citus.explain_all_tasks TO off;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-Distributed Query into pg_merge_job_570018
+Distributed Query into pg_merge_job_0019
   Executor: Task-Tracker
   Task Count: 4
   Tasks Shown: One of 4
@@ -467,7 +468,7 @@ Distributed Query into pg_merge_job_570018
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570018
+        ->  Seq Scan on pg_merge_job_0019
 -- Test re-partition join
 SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)
@@ -476,7 +477,7 @@ EXPLAIN (COSTS FALSE)
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
-Distributed Query into pg_merge_job_570021
+Distributed Query into pg_merge_job_0022
   Executor: Task-Tracker
   Task Count: 1
   Tasks Shown: None, not supported for re-partition queries
@@ -488,7 +489,7 @@ Distributed Query into pg_merge_job_570021
               Merge Task Count: 1
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570021
+        ->  Seq Scan on pg_merge_job_0022
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
 	FROM lineitem, orders, customer, supplier_single_shard
@@ -523,8 +524,8 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             {
               "Node Type": "Seq Scan",
               "Parent Relationship": "Outer",
-              "Relation Name": "pg_merge_job_570024",
-              "Alias": "pg_merge_job_570024"
+              "Relation Name": "pg_merge_job_0025",
+              "Alias": "pg_merge_job_0025"
             }
           ]
         }
@@ -573,8 +574,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Plan>
               <Node-Type>Seq Scan</Node-Type>
               <Parent-Relationship>Outer</Parent-Relationship>
-              <Relation-Name>pg_merge_job_570030</Relation-Name>
-              <Alias>pg_merge_job_570030</Alias>
+              <Relation-Name>pg_merge_job_0031</Relation-Name>
+              <Alias>pg_merge_job_0031</Alias>
             </Plan>
           </Plans>
         </Plan>
@@ -625,8 +626,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Plans: 
           - Node Type: "Seq Scan"
             Parent Relationship: "Outer"
-            Relation Name: "pg_merge_job_570035"
-            Alias: "pg_merge_job_570035"
+            Relation Name: "pg_merge_job_0036"
+            Alias: "pg_merge_job_0036"
 -- test parallel aggregates
 SET parallel_setup_cost=0;
 ERROR:  unrecognized configuration parameter "parallel_setup_cost"
@@ -643,7 +644,7 @@ Aggregate
   ->  Seq Scan on lineitem_clone
 -- ensure distributed plans don't break
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
-Distributed Query into pg_merge_job_570036
+Distributed Query into pg_merge_job_0037
   Executor: Task-Tracker
   Task Count: 8
   Tasks Shown: One of 8
@@ -653,12 +654,12 @@ Distributed Query into pg_merge_job_570036
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570036
+        ->  Seq Scan on pg_merge_job_0037
 -- ensure EXPLAIN EXECUTE doesn't crash
 PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
-Distributed Query into pg_merge_job_570037
+Distributed Query into pg_merge_job_0038
   Executor: Task-Tracker
   Task Count: 4
   Tasks Shown: One of 4
@@ -669,11 +670,11 @@ Distributed Query into pg_merge_job_570037
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570037
+        ->  Seq Scan on pg_merge_job_0038
 SET citus.task_executor_type TO 'real-time';
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Distributed Query into pg_merge_job_570038
+Distributed Query into pg_merge_job_0039
   Executor: Router
   Task Count: 1
   Tasks Shown: All
@@ -686,7 +687,7 @@ Distributed Query into pg_merge_job_570038
 PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
-Distributed Query into pg_merge_job_570039
+Distributed Query into pg_merge_job_0040
   Executor: Real-Time
   Task Count: 4
   Tasks Shown: One of 4
@@ -697,7 +698,7 @@ Distributed Query into pg_merge_job_570039
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570039
+        ->  Seq Scan on pg_merge_job_0040
 -- EXPLAIN EXECUTE of parametrized prepared statements is broken, but
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;

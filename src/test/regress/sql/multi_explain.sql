@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 570000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 570000;
 
 -- print major version to make version-specific tests clear
 SELECT substring(version(), '\d+\.\d+') AS major_version;
@@ -12,6 +11,7 @@ SELECT substring(version(), '\d+\.\d+') AS major_version;
 
 SET citus.task_executor_type TO 'real-time';
 SET citus.explain_distributed_queries TO on;
+SET citus.enable_unique_job_ids TO off;
 
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)

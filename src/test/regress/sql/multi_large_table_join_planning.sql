@@ -8,19 +8,18 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 690000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 690000;
 
 
 BEGIN;
 SET client_min_messages TO DEBUG4;
 SET citus.large_table_shard_count TO 2;
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_unique_job_ids TO off;
 
 -- Debug4 log messages display jobIds within them. We explicitly set the jobId
 -- sequence here so that the regression output becomes independent of the number
 -- of jobs executed prior to running this test.
 
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250;
 
 -- Multi-level repartition join to verify our projection columns are correctly
 -- referenced and propagated across multiple repartition jobs. The test also

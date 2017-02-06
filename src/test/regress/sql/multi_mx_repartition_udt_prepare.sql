@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 535000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 
 -- START type creation
 
@@ -202,6 +201,7 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 SET citus.large_table_shard_count = 1;
 SET citus.task_executor_type = 'task-tracker';
 SET citus.log_multi_join_order = true;
+SET citus.enable_unique_job_ids TO off;
 
 EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
@@ -213,6 +213,4 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 	ORDER BY repartition_udt.pk;
 	
 \c - - - :worker_1_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 \c - - - :worker_2_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
