@@ -1,3 +1,93 @@
+### citus v6.1.0 (February 9, 2017) ###
+
+* Unifies connection management
+
+* Unifies transaction management and adds support for COPY and some UDFs
+
+* Adds support for reference tables
+
+* Adds `upgrade_to_reference_table` UDF to upgrade pre-6.1 reference tables
+
+* Adds support for auto-replication of reference tables
+
+* Adds support for isolating tenants
+
+* Adds support for MX clusters
+
+* Adds `start_metadata_sync_to_node` UDF to propogate metadata changes to worker
+
+* Adds support for `FILTER`
+
+* Adds `VIEW` support for `SELECT` queries
+
+* Adds support for adding foreign key constraints with `ALTER TABLE`
+
+* Adds `colocate_with` parameter to `create_distributed_table`
+
+* Extends prepared statement support
+
+* Adds support for function evaluation in `INSERT INTO ... SELECT` queries
+
+* Fixes a bug affecting `INSERT INTO ... SELECT` queries having constant values
+
+* Adds support for shard locking capability from SQL
+
+* Adds citus tools functions to product default configuration
+
+* Adds `column_to_column_name` UDF to translate `partkey` to human-readable name
+
+* Adds `master_disable_node` UDF to temporarily disable a node
+
+* Activates router planner for all router plannable queries
+
+* Changes default replication factor to one
+
+* Adds an `replication_model` GUC to set replication model of distributed tables
+
+* Adds an `node_connection_timeout` GUC to unify different time out variables
+
+* Adds an `enable_deadlock_prevention` GUC to enable transactions across nodes
+
+* Sets `max_prepared_transactions` if it is not configured
+
+* Adds automatic code coverage testing for continious development
+
+* Increases test coverage
+
+* Changes some tests to have consistent output
+
+* Adds support for running regression tests under valgrind
+
+* Adds support for running PostgreSQL's regression tests with Citus
+
+* Fixes a bug causing failed COPY does not mark placements inactive
+
+* Fixes a bug affecting reads from `pg_dist_shard_placement` table
+
+* Fixes a bug causing crash if foreign key is created without referenced column
+
+* Fixes a bug causing crash if we access to catalog after aborted transaction
+
+* Fixes a bug affecting `JOIN` queries which needs repartitioning
+
+* Fixes a bug affecting node insertions to `pg_dist_node` table
+
+* Fixes a bug affecting comman table expressions with modifying statements
+
+* Fixes a bug affecting concurrent shard append and shard delete
+
+* Fixes a bug affecting repartition jobs which are executed by non-superusers
+
+* Grants read access for metadata tables to non-superusers
+
+* Improves locking mechanisms to prevent race conditions
+
+* Error message improvements and standardization
+
+* Various performance optimizations
+
+* Updates README.md to have up to date information
+
 ### citus v6.0.1 (November 29, 2016) ###
 
 * Fixes a bug causing failures during pg_upgrade
