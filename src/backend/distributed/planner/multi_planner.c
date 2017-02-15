@@ -35,6 +35,10 @@
 
 
 static List *relationRestrictionContextList = NIL;
+static CustomScanMethods CitusCustomScanMethods = {
+	"CitusScan",
+	CitusCreateScan
+};
 
 
 /* local function forward declarations */
@@ -294,12 +298,6 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 }
 
 
-static CustomScanMethods CitusCustomScanMethods = {
-	"CitusScan",
-	CitusCreateScan
-};
-
-
 /*
  * GetMultiPlan returns the associated MultiPlan for a CustomScan.
  */
@@ -318,31 +316,25 @@ GetMultiPlan(CustomScan *customScan)
 }
 
 
-/* Does the passed in statement require distributed execution? */
-bool
-HasCitusToplevelNode(PlannedStmt *result)
-{
-	elog(ERROR, "gone");
-}
-
-
+/*
+ * SerializeMultiPlan returns the string representing the distributed plan.
+ *
+ * FIXME: This should be improved for 9.6+, we we can copy trees efficiently.
+ * I.e. we should introduce copy support for relevant node types, and just
+ * return the MultiPlan as-is for 9.6.
+ */
 Node *
-SerializableMultiPlan(MultiPlan *multiPlan)
+SerializeMultiPlan(MultiPlan *multiPlan)
 {
-	/*
-	 * FIXME: This should be improved for 9.6+, we we can copy trees
-	 * efficiently. I.e. we should introduce copy support for relevant node
-	 * types, and just return the MultiPlan as-is for 9.6.
-	 */
-	char *serializedPlan = NULL;
+	char *serializedMultiPlan = NULL;
 	Const *multiPlanData = NULL;
 
-	serializedPlan = CitusNodeToString(multiPlan);
+	serializedMultiPlan = CitusNodeToString(multiPlan);
 
 	multiPlanData = makeNode(Const);
 	multiPlanData->consttype = CSTRINGOID;
-	multiPlanData->constlen = strlen(serializedPlan);
-	multiPlanData->constvalue = CStringGetDatum(serializedPlan);
+	multiPlanData->constlen = strlen(serializedMultiPlan);
+	multiPlanData->constvalue = CStringGetDatum(serializedMultiPlan);
 	multiPlanData->constbyval = false;
 	multiPlanData->location = -1;
 
@@ -389,7 +381,7 @@ MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 {
 	PlannedStmt *resultPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
-	Node *multiPlanData = SerializableMultiPlan(multiPlan);
+	Node *multiPlanData = SerializeMultiPlan(multiPlan);
 
 	customScan->methods = &CitusCustomScanMethods;
 	customScan->custom_private = list_make1(multiPlanData);
