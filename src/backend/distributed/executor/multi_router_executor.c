@@ -408,11 +408,14 @@ RequiresConsistentSnapshot(Task *task)
 
 
 void
-RouterBeginScan(CitusScanState *scanState)
+RouterBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
+	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;
 	Job *workerJob = multiPlan->workerJob;
 	List *taskList = workerJob->taskList;
+
+	VerifyCitusScanState(node);
 
 	/*
 	 * If we are executing a prepared statement, then we may not yet have obtained
@@ -429,8 +432,9 @@ RouterBeginScan(CitusScanState *scanState)
 
 
 TupleTableSlot *
-RouterExecScan(CitusScanState *scanState)
+RouterExecScan(CustomScanState *node)
 {
+	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;
 	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 
@@ -1402,40 +1406,4 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 	}
 
 	return gotResponse && !commandFailed;
-}
-
-
-/*
- * RouterExecutorFinish cleans up after a distributed execution.
- */
-void
-RouterExecutorFinish(QueryDesc *queryDesc)
-{
-	EState *estate = queryDesc->estate;
-	Assert(estate != NULL);
-
-	estate->es_finished = true;
-}
-
-
-/*
- * RouterExecutorEnd cleans up the executor state after a distributed
- * execution.
- */
-void
-RouterExecutorEnd(QueryDesc *queryDesc)
-{
-	EState *estate = queryDesc->estate;
-	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
-
-	if (routerState->tuplestorestate)
-	{
-		tuplestore_end(routerState->tuplestorestate);
-	}
-
-	Assert(estate != NULL);
-
-	FreeExecutorState(estate);
-	queryDesc->estate = NULL;
-	queryDesc->totaltime = NULL;
 }

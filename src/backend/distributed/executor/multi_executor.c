@@ -60,24 +60,54 @@ static CustomExecMethods CitusCustomExecMethods = {
 };
 
 
+static CustomExecMethods RouterCustomExecMethods = {
+	"CitusScan",
+	RouterBeginScan,
+	RouterExecScan,
+	CitusEndScan,
+	CitusReScan,
+#if (PG_VERSION_NUM >= 90600)
+	NULL, /* NO EstimateDSMCustomScan callback */
+	NULL, /* NO InitializeDSMCustomScan callback */
+	NULL, /* NO InitializeWorkerCustomScan callback */
+#endif
+	NULL,
+	NULL,
+	CitusExplainScan
+};
+
+
 Node *
 CitusCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
 
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->customScanState.methods = &CitusCustomExecMethods;
 	scanState->multiPlan = GetMultiPlan(scan);
 	scanState->executorType = JobExecutorType(scanState->multiPlan);
+
+	if (scanState->executorType == MULTI_EXECUTOR_ROUTER)
+	{
+		scanState->customScanState.methods = &RouterCustomExecMethods;
+	}
+	else
+	{
+		scanState->customScanState.methods = &CitusCustomExecMethods;
+	}
 
 	return (Node *) scanState;
 }
 
 
 void
-CitusBeginScan(CustomScanState *node,
-			   EState *estate,
-			   int eflags)
+CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
+{
+	VerifyCitusScanState(node);
+}
+
+
+void
+VerifyCitusScanState(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;
@@ -86,13 +116,6 @@ CitusBeginScan(CustomScanState *node,
 
 	/* ensure plan is executable */
 	VerifyMultiPlanValidity(multiPlan);
-
-	/* ExecCheckRTPerms(planStatement->rtable, true); */
-
-	if (scanState->executorType == MULTI_EXECUTOR_ROUTER)
-	{
-		RouterBeginScan(scanState);
-	}
 }
 
 
@@ -102,141 +125,134 @@ CitusExecScan(CustomScanState *node)
 	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;
 
-	if (scanState->executorType == MULTI_EXECUTOR_ROUTER)
-	{
-		return RouterExecScan(scanState);
-	}
-	else
-	{
-		TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
+	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 
-		if (!scanState->finishedUnderlyingScan)
+	if (!scanState->finishedUnderlyingScan)
+	{
+		Job *workerJob = multiPlan->workerJob;
+		StringInfo jobDirectoryName = NULL;
+		EState *executorState = scanState->customScanState.ss.ps.state;
+		List *workerTaskList = workerJob->taskList;
+		ListCell *workerTaskCell = NULL;
+		TupleDesc tupleDescriptor = NULL;
+		Relation fakeRel = NULL;
+		MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+		ExprContext *executorExpressionContext =
+			GetPerTupleExprContext(executorState);
+		uint32 columnCount = 0;
+		Datum *columnValues = NULL;
+		bool *columnNulls = NULL;
+
+		/*
+		 * We create a directory on the master node to keep task execution results.
+		 * We also register this directory for automatic cleanup on portal delete.
+		 */
+		jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
+		CreateDirectory(jobDirectoryName);
+
+		ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
+		ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
+
+		/* pick distributed executor to use */
+		if (executorState->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		{
-			Job *workerJob = multiPlan->workerJob;
-			StringInfo jobDirectoryName = NULL;
-			EState *executorState = scanState->customScanState.ss.ps.state;
-			List *workerTaskList = workerJob->taskList;
-			ListCell *workerTaskCell = NULL;
-			TupleDesc tupleDescriptor = NULL;
-			Relation fakeRel = NULL;
-			MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
-			ExprContext *executorExpressionContext =
-				GetPerTupleExprContext(executorState);
-			uint32 columnCount = 0;
-			Datum *columnValues = NULL;
-			bool *columnNulls = NULL;
+			/* skip distributed query execution for EXPLAIN commands */
+		}
+		else if (scanState->executorType == MULTI_EXECUTOR_REAL_TIME)
+		{
+			MultiRealTimeExecute(workerJob);
+		}
+		else if (scanState->executorType == MULTI_EXECUTOR_TASK_TRACKER)
+		{
+			MultiTaskTrackerExecute(workerJob);
+		}
 
-			/*
-			 * We create a directory on the master node to keep task execution results.
-			 * We also register this directory for automatic cleanup on portal delete.
-			 */
-			jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
-			CreateDirectory(jobDirectoryName);
+		tupleDescriptor = node->ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
 
-			ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
-			ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
+		/*
+		 * Load data, collected by Multi*Execute() above, into a
+		 * tuplestore. For that first create a tuplestore, and then copy
+		 * the files one-by-one.
+		 *
+		 * FIXME: Should probably be in a separate routine.
+		 *
+		 * Long term it'd be a lot better if Multi*Execute() directly
+		 * filled the tuplestores, but that's a fair bit of work.
+		 */
 
-			/* pick distributed executor to use */
-			if (executorState->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY)
+		/*
+		 * To be able to use copy.c, we need a Relation descriptor.  As
+		 * there's no relation corresponding to the data loaded from
+		 * workers, fake one.  We just need the bare minimal set of fields
+		 * accessed by BeginCopyFrom().
+		 *
+		 * FIXME: should be abstracted into a separate function.
+		 */
+		fakeRel = palloc0(sizeof(RelationData));
+		fakeRel->rd_att = tupleDescriptor;
+		fakeRel->rd_rel = palloc0(sizeof(FormData_pg_class));
+		fakeRel->rd_rel->relkind = RELKIND_RELATION;
+
+		columnCount = tupleDescriptor->natts;
+		columnValues = palloc0(columnCount * sizeof(Datum));
+		columnNulls = palloc0(columnCount * sizeof(bool));
+
+		Assert(scanState->tuplestorestate == NULL);
+		scanState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
+
+		foreach(workerTaskCell, workerTaskList)
+		{
+			Task *workerTask = (Task *) lfirst(workerTaskCell);
+			StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
+			StringInfo taskFilename =
+				TaskFilename(jobDirectoryName, workerTask->taskId);
+			List *copyOptions = NIL;
+			CopyState copyState = NULL;
+
+			if (BinaryMasterCopyFormat)
 			{
-				/* skip distributed query execution for EXPLAIN commands */
+				DefElem *copyOption = makeDefElem("format",
+												  (Node *) makeString("binary"));
+				copyOptions = lappend(copyOptions, copyOption);
 			}
-			else if (scanState->executorType == MULTI_EXECUTOR_REAL_TIME)
+			copyState = BeginCopyFrom(fakeRel, taskFilename->data, false, NULL,
+									  copyOptions);
+
+			while (true)
 			{
-				MultiRealTimeExecute(workerJob);
-			}
-			else if (scanState->executorType == MULTI_EXECUTOR_TASK_TRACKER)
-			{
-				MultiTaskTrackerExecute(workerJob);
-			}
+				MemoryContext oldContext = NULL;
+				bool nextRowFound = false;
 
-			tupleDescriptor = node->ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+				ResetPerTupleExprContext(executorState);
+				oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-			/*
-			 * Load data, collected by Multi*Execute() above, into a
-			 * tuplestore. For that first create a tuplestore, and then copy
-			 * the files one-by-one.
-			 *
-			 * FIXME: Should probably be in a separate routine.
-			 *
-			 * Long term it'd be a lot better if Multi*Execute() directly
-			 * filled the tuplestores, but that's a fair bit of work.
-			 */
-
-			/*
-			 * To be able to use copy.c, we need a Relation descriptor.  As
-			 * there's no relation corresponding to the data loaded from
-			 * workers, fake one.  We just need the bare minimal set of fields
-			 * accessed by BeginCopyFrom().
-			 *
-			 * FIXME: should be abstracted into a separate function.
-			 */
-			fakeRel = palloc0(sizeof(RelationData));
-			fakeRel->rd_att = tupleDescriptor;
-			fakeRel->rd_rel = palloc0(sizeof(FormData_pg_class));
-			fakeRel->rd_rel->relkind = RELKIND_RELATION;
-
-			columnCount = tupleDescriptor->natts;
-			columnValues = palloc0(columnCount * sizeof(Datum));
-			columnNulls = palloc0(columnCount * sizeof(bool));
-
-			Assert(scanState->tuplestorestate == NULL);
-			scanState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
-
-			foreach(workerTaskCell, workerTaskList)
-			{
-				Task *workerTask = (Task *) lfirst(workerTaskCell);
-				StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
-				StringInfo taskFilename =
-					TaskFilename(jobDirectoryName, workerTask->taskId);
-				List *copyOptions = NIL;
-				CopyState copyState = NULL;
-
-				if (BinaryMasterCopyFormat)
+				nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+											columnValues, columnNulls, NULL);
+				if (!nextRowFound)
 				{
-					DefElem *copyOption = makeDefElem("format",
-													  (Node *) makeString("binary"));
-					copyOptions = lappend(copyOptions, copyOption);
-				}
-				copyState = BeginCopyFrom(fakeRel, taskFilename->data, false, NULL,
-										  copyOptions);
-
-				while (true)
-				{
-					MemoryContext oldContext = NULL;
-					bool nextRowFound = false;
-
-					ResetPerTupleExprContext(executorState);
-					oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-					nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-												columnValues, columnNulls, NULL);
-					if (!nextRowFound)
-					{
-						MemoryContextSwitchTo(oldContext);
-						break;
-					}
-
-					tuplestore_putvalues(scanState->tuplestorestate,
-										 tupleDescriptor,
-										 columnValues, columnNulls);
 					MemoryContextSwitchTo(oldContext);
+					break;
 				}
+
+				tuplestore_putvalues(scanState->tuplestorestate,
+									 tupleDescriptor,
+									 columnValues, columnNulls);
+				MemoryContextSwitchTo(oldContext);
 			}
-
-			scanState->finishedUnderlyingScan = true;
 		}
 
-		if (scanState->tuplestorestate != NULL)
-		{
-			Tuplestorestate *tupleStore = scanState->tuplestorestate;
-			tuplestore_gettupleslot(tupleStore, true, false, resultSlot);
-
-			return resultSlot;
-		}
-
-		return NULL;
+		scanState->finishedUnderlyingScan = true;
 	}
+
+	if (scanState->tuplestorestate != NULL)
+	{
+		Tuplestorestate *tupleStore = scanState->tuplestorestate;
+		tuplestore_gettupleslot(tupleStore, true, false, resultSlot);
+
+		return resultSlot;
+	}
+
+	return NULL;
 }
 
 

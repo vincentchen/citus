@@ -40,13 +40,13 @@ typedef struct CitusScanState
 } CitusScanState;
 
 Node * CitusCreateScan(CustomScan *scan);
-extern void CitusBeginScan(CustomScanState *node,
-						   EState *estate,
-						   int eflags);
+extern void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern void CitusEndScan(CustomScanState *node);
 extern void CitusReScan(CustomScanState *node);
 extern void CitusExplainScan(CustomScanState *node, List *ancestors,
 							 struct ExplainState *es);
+extern void VerifyCitusScanState(CustomScanState *node);
+
 
 #endif /* MULTI_EXECUTOR_H */
