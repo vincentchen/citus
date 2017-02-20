@@ -44,36 +44,21 @@
  * allow to easily share code between routines.
  */
 static CustomExecMethods CitusCustomExecMethods = {
-	"CitusScan",
-	CitusBeginScan,
-	CitusExecScan,
-	CitusEndScan,
-	CitusReScan,
-#if (PG_VERSION_NUM >= 90600)
-	NULL, /* NO EstimateDSMCustomScan callback */
-	NULL, /* NO InitializeDSMCustomScan callback */
-	NULL, /* NO InitializeWorkerCustomScan callback */
-#endif
-	NULL,
-	NULL,
-	CitusExplainScan
+	.CustomName = "CitusScan",
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = CitusExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
 };
 
-
 static CustomExecMethods RouterCustomExecMethods = {
-	"CitusScan",
-	RouterBeginScan,
-	RouterExecScan,
-	CitusEndScan,
-	CitusReScan,
-#if (PG_VERSION_NUM >= 90600)
-	NULL, /* NO EstimateDSMCustomScan callback */
-	NULL, /* NO InitializeDSMCustomScan callback */
-	NULL, /* NO InitializeWorkerCustomScan callback */
-#endif
-	NULL,
-	NULL,
-	CitusExplainScan
+	.CustomName = "CitusScan",
+	.BeginCustomScan = RouterBeginScan,
+	.ExecCustomScan = RouterExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
 };
 
 
