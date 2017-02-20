@@ -488,17 +488,9 @@ RouterExecScan(CustomScanState *node)
 
 	/* if the underlying query produced output, return it */
 
-	/*
-	 * FIXME: centralize this into function to be shared between router and
-	 * other executors?
-	 */
 	if (scanState->tuplestorestate != NULL)
 	{
-		Tuplestorestate *tupleStore = scanState->tuplestorestate;
-
-		/* XXX: could trivially support backward scans here */
-		tuplestore_gettupleslot(tupleStore, true, false, resultSlot);
-
+		ReadNextTuple(scanState, resultSlot);
 		return resultSlot;
 	}
 
