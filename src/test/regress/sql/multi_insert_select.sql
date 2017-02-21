@@ -326,6 +326,21 @@ WHERE  user_id IN (SELECT user_id
                    FROM   raw_events_second
                    WHERE  user_id = 2);
 
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM  raw_events_second WHERE false);
+
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE value_1 = 1000 OR value_1 = 2000 OR value_1 = 3000);
+
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
@@ -613,11 +628,7 @@ FROM
 WHERE 
   raw_events_first.user_id = 10;
 
--- same as the above with INNER JOIN
--- however this time query is not pushed down
--- to the worker. This is related to how we process
--- restriction infos, which we're considering to
--- improve
+-- same query the above with INNER JOIN
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
@@ -866,6 +877,121 @@ SELECT user_id
 FROM   raw_events_first 
 WHERE  user_id IN (SELECT value_2 
                    FROM   raw_events_second);
+
+
+-- some supported lateral joins
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.user_id = reference_ids.user_id
+    GROUP BY averages.user_id;
+
+
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.user_id = reference_ids.user_id
+JOIN LATERAL
+    (SELECT user_id FROM agg_events WHERE user_id = 15) as agg_ids ON (agg_ids.user_id = averages.user_id)
+
+    GROUP BY averages.user_id;
+
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first WHERE false) as averages ON averages.user_id = reference_ids.user_id
+JOIN LATERAL
+    (SELECT user_id FROM agg_events WHERE user_id = 15) as agg_ids ON (agg_ids.user_id = averages.user_id)
+
+    GROUP BY averages.user_id;
+
+
+
+-- some unsupported LATERAL JOINs
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first WHERE
+      value_4 = reference_ids.user_id) as averages ON true
+    GROUP BY averages.user_id;
+
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.value_4 = reference_ids.user_id
+    GROUP BY averages.user_id;
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.user_id = reference_ids.user_id
+JOIN LATERAL
+    (SELECT user_id, value_4 FROM raw_events_second WHERE user_id = 15) as agg_ids ON (agg_ids.value_4 = averages.user_id)
+    GROUP BY averages.user_id;
 
 -- we currently not support grouping sets
 INSERT INTO agg_events

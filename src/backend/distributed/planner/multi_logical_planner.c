@@ -2131,3 +2131,24 @@ OperatorImplementsEquality(Oid opno)
 
 	return equalityOperator;
 }
+
+
+bool
+OperatorImplementsStrategy(Oid opno, int strategy)
+{
+	bool operatorImplementsStrategy = false;
+	List *btreeIntepretationList = get_op_btree_interpretation(opno);
+	ListCell *btreeInterpretationCell = NULL;
+	foreach(btreeInterpretationCell, btreeIntepretationList)
+	{
+		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
+													lfirst(btreeInterpretationCell);
+		if (btreeIntepretation->strategy == strategy)
+		{
+			operatorImplementsStrategy = true;
+			break;
+		}
+	}
+
+	return operatorImplementsStrategy;
+}
