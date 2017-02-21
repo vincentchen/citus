@@ -438,7 +438,7 @@ RouterExecScan(CustomScanState *node)
 	MultiPlan *multiPlan = scanState->multiPlan;
 	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 
-	if (!scanState->finishedUnderlyingScan)
+	if (!scanState->finishedRemoteScan)
 	{
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
@@ -483,7 +483,7 @@ RouterExecScan(CustomScanState *node)
 		}
 
 		/* mark underlying query as having executed */
-		scanState->finishedUnderlyingScan = true;
+		scanState->finishedRemoteScan = true;
 	}
 
 	/* if the underlying query produced output, return it */

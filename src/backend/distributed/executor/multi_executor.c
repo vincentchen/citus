@@ -111,7 +111,7 @@ CitusExecScan(CustomScanState *node)
 
 	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 
-	if (!scanState->finishedUnderlyingScan)
+	if (!scanState->finishedRemoteScan)
 	{
 		Job *workerJob = multiPlan->workerJob;
 		StringInfo jobDirectoryName = NULL;
@@ -225,7 +225,7 @@ CitusExecScan(CustomScanState *node)
 			}
 		}
 
-		scanState->finishedUnderlyingScan = true;
+		scanState->finishedRemoteScan = true;
 	}
 
 	if (scanState->tuplestorestate != NULL)
@@ -276,7 +276,7 @@ CitusReScan(CustomScanState *node)
 	CitusScanState *scanState = (CitusScanState *) node;
 
 	scanState->tuplestorestate = NULL;
-	scanState->finishedUnderlyingScan = true;
+	scanState->finishedRemoteScan = true;
 
 	/*
 	 * XXX: this probably already works, but if not should be easily

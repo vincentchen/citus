@@ -33,9 +33,7 @@ typedef struct CitusScanState
 	CustomScanState customScanState;
 	MultiPlan *multiPlan;
 	MultiExecutorType executorType;
-
-	/* state for router */
-	bool finishedUnderlyingScan;
+	bool finishedRemoteScan;
 	Tuplestorestate *tuplestorestate;
 } CitusScanState;
 

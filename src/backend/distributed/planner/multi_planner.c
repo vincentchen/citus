@@ -345,7 +345,7 @@ SerializeMultiPlan(MultiPlan *multiPlan)
 
 /*
  * DeSerializeMultiPlan returns the deserialized distributed plan from the string
- * represenration in a Const node.
+ * representation in a Const node.
  */
 MultiPlan *
 DeSerializeMultiPlan(Node *node)
@@ -445,7 +445,7 @@ CreateFinalPlanWithRouterExecution(PlannedStmt *localPlan, MultiPlan *multiPlan,
 			continue;
 		}
 
-		/* build target entry pointing to custom scan */
+		/* build target entry pointing to custom scan range table entry */
 		newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 		newTargetEntry = flatCopyTargetEntry(targetEntry);
 		newTargetEntry->expr = (Expr *) newVar;
