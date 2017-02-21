@@ -183,7 +183,7 @@ CitusExecScan(CustomScanState *node)
 		columnNulls = palloc0(columnCount * sizeof(bool));
 
 		Assert(scanState->tuplestorestate == NULL);
-		scanState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
+		scanState->tuplestorestate = tuplestore_begin_heap(true, false, work_mem);
 
 		foreach(workerTaskCell, workerTaskList)
 		{
@@ -246,15 +246,12 @@ ReadNextTuple(CitusScanState *scanState, TupleTableSlot *resultSlot)
 	ScanDirection scanDirection = NoMovementScanDirection;
 	bool forwardScanDirection = true;
 
-	/*
-	 * XXX: Backward scan hits the first Assert in tuplestore_gettuple()
-	 */
 	scanDirection = scanState->customScanState.ss.ps.state->es_direction;
-	if (!ScanDirectionIsForward(scanDirection))
+	Assert(ScanDirectionIsValid(scanDirection));
+
+	if (ScanDirectionIsBackward(scanDirection))
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("scan directions other than forward scans "
-							   "are unsupported")));
+		forwardScanDirection = false;
 	}
 
 	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);

@@ -1197,7 +1197,7 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 
 	if (scanState->tuplestorestate == NULL)
 	{
-		scanState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
+		scanState->tuplestorestate = tuplestore_begin_heap(true, false, work_mem);
 	}
 	else if (!failOnError)
 	{
