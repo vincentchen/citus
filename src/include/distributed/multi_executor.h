@@ -46,7 +46,7 @@ extern void CitusEndScan(CustomScanState *node);
 extern void CitusReScan(CustomScanState *node);
 extern void CitusExplainScan(CustomScanState *node, List *ancestors,
 							 struct ExplainState *es);
-extern void VerifyCitusScanState(CustomScanState *node);
+extern void ValidateCitusScanState(CustomScanState *node);
 extern void ReadNextTuple(CitusScanState *scanState, TupleTableSlot *resultSlot);
 
 

@@ -66,7 +66,6 @@ Node *
 CitusCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
 	scanState->multiPlan = GetMultiPlan(scan);
 	scanState->executorType = JobExecutorType(scanState->multiPlan);
@@ -87,12 +86,12 @@ CitusCreateScan(CustomScan *scan)
 void
 CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	VerifyCitusScanState(node);
+	ValidateCitusScanState(node);
 }
 
 
 void
-VerifyCitusScanState(CustomScanState *node)
+ValidateCitusScanState(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;

@@ -23,14 +23,10 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_router_planner.h"
-
 #include "executor/executor.h"
-
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-
 #include "optimizer/planner.h"
-
 #include "utils/memutils.h"
 
 
@@ -347,6 +343,10 @@ SerializeMultiPlan(MultiPlan *multiPlan)
 }
 
 
+/*
+ * DeSerializeMultiPlan returns the deserialized distributed plan from the string
+ * represenration in a Const node.
+ */
 MultiPlan *
 DeSerializeMultiPlan(Node *node)
 {
@@ -367,7 +367,7 @@ DeSerializeMultiPlan(Node *node)
 
 /*
  * CreateFinalPlan combines local plan with distributed plan and creates a plan
- * which can be run by generic PostgreSQL executor.
+ * which can be run by the PostgreSQL executor.
  */
 PlannedStmt *
 CreateFinalPlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
@@ -379,7 +379,6 @@ CreateFinalPlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 	customScan->methods = &CitusCustomScanMethods;
 	customScan->custom_private = list_make1(multiPlanData);
 
-	/* FIXME: This probably ain't correct */
 	if (ExecSupportsBackwardScan(localPlan->planTree))
 	{
 		customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
@@ -418,62 +417,56 @@ CreateFinalPlanWithRouterExecution(PlannedStmt *localPlan, MultiPlan *multiPlan,
 								   CustomScan *customScan)
 {
 	PlannedStmt *finalPlan = NULL;
-	ListCell *lc = NULL;
+	RangeTblEntry *customScanRangeTableEntry = NULL;
+	ListCell *targetEntryCell = NULL;
 	List *targetList = NIL;
-	bool foundJunk = false;
-	RangeTblEntry *rangeTableEntry = NULL;
-	List *columnNames = NIL;
-	int newRTI = list_length(localPlan->rtable) + 1;
+	List *columnNameList = NIL;
 
-	/*
-	 * XXX: This basically just builds a targetlist to "read" from the
-	 * custom scan output.
-	 */
-	foreach(lc, localPlan->planTree->targetlist)
+	int rangeTableCount = list_length(localPlan->rtable);
+	int customScanRangeTableIndex = rangeTableCount + 1;
+
+	/* build a targetlist to "read" from the custom scan output */
+	foreach(targetEntryCell, localPlan->planTree->targetlist)
 	{
-		TargetEntry *te = lfirst(lc);
-		Var *newVar = NULL;
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
 		TargetEntry *newTargetEntry = NULL;
+		Var *newVar = NULL;
+		Value *columnName = NULL;
 
-		Assert(IsA(te, TargetEntry));
+		Assert(IsA(targetEntry, TargetEntry));
 
 		/*
-		 * XXX: I can't think of a case where we'd need resjunk stuff at
-		 * the toplevel of a router query - all things needing it have
-		 * been pushed down.
+		 * This is unlikely to be hit because we would not need resjunk stuff
+		 * at the toplevel of a router query - all things needing it have been
+		 * pushed down.
 		 */
-		if (te->resjunk)
+		if (targetEntry->resjunk)
 		{
-			foundJunk = true;
 			continue;
 		}
 
-		if (foundJunk)
-		{
-			ereport(ERROR, (errmsg("unexpected !junk entry after resjunk entry")));
-		}
-
-		/* build TE pointing to custom scan */
-		newVar = makeVarFromTargetEntry(newRTI, te);
-		newTargetEntry = flatCopyTargetEntry(te);
+		/* build target entry pointing to custom scan */
+		newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
+		newTargetEntry = flatCopyTargetEntry(targetEntry);
 		newTargetEntry->expr = (Expr *) newVar;
 		targetList = lappend(targetList, newTargetEntry);
 
-		columnNames = lappend(columnNames, makeString(te->resname));
+		columnName = makeString(targetEntry->resname);
+		columnNameList = lappend(columnNameList, columnName);
 	}
 
-	/* XXX: can't think of a better RTE type than VALUES */
-	rangeTableEntry = makeNode(RangeTblEntry);
-	rangeTableEntry->rtekind = RTE_VALUES; /* can't look up relation */
-	rangeTableEntry->eref = makeAlias("remote_scan", columnNames);
-	rangeTableEntry->inh = false;
-	rangeTableEntry->inFromCl = true;
+	/* we cannot look up a relation here, so we use VALUES as the relation kind */
+	customScanRangeTableEntry = makeNode(RangeTblEntry);
+	customScanRangeTableEntry->rtekind = RTE_VALUES;
+	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
+	customScanRangeTableEntry->inh = false;
+	customScanRangeTableEntry->inFromCl = true;
 
 	customScan->scan.plan.targetlist = targetList;
 
 	finalPlan = localPlan;
 	finalPlan->planTree = (Plan *) customScan;
-	finalPlan->rtable = lappend(finalPlan->rtable, rangeTableEntry);
+	finalPlan->rtable = lappend(finalPlan->rtable, customScanRangeTableEntry);
 
 	return finalPlan;
 }

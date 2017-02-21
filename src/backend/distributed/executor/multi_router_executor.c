@@ -415,7 +415,7 @@ RouterBeginScan(CustomScanState *node, EState *estate, int eflags)
 	Job *workerJob = multiPlan->workerJob;
 	List *taskList = workerJob->taskList;
 
-	VerifyCitusScanState(node);
+	ValidateCitusScanState(node);
 
 	/*
 	 * If we are executing a prepared statement, then we may not yet have obtained
