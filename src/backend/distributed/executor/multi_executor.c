@@ -62,6 +62,9 @@ static CustomExecMethods RouterCustomExecMethods = {
 };
 
 
+static void LoadTuplesIntoTupleStore(CitusScanState *scanState, List *workerTaskList);
+
+
 Node *
 CitusCreateScan(CustomScan *scan)
 {
@@ -117,15 +120,6 @@ CitusExecScan(CustomScanState *node)
 		StringInfo jobDirectoryName = NULL;
 		EState *executorState = scanState->customScanState.ss.ps.state;
 		List *workerTaskList = workerJob->taskList;
-		ListCell *workerTaskCell = NULL;
-		TupleDesc tupleDescriptor = NULL;
-		Relation fakeRel = NULL;
-		MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
-		ExprContext *executorExpressionContext =
-			GetPerTupleExprContext(executorState);
-		uint32 columnCount = 0;
-		Datum *columnValues = NULL;
-		bool *columnNulls = NULL;
 
 		/*
 		 * We create a directory on the master node to keep task execution results.
@@ -151,79 +145,7 @@ CitusExecScan(CustomScanState *node)
 			MultiTaskTrackerExecute(workerJob);
 		}
 
-		tupleDescriptor = node->ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
-
-		/*
-		 * Load data, collected by Multi*Execute() above, into a
-		 * tuplestore. For that first create a tuplestore, and then copy
-		 * the files one-by-one.
-		 *
-		 * FIXME: Should probably be in a separate routine.
-		 *
-		 * Long term it'd be a lot better if Multi*Execute() directly
-		 * filled the tuplestores, but that's a fair bit of work.
-		 */
-
-		/*
-		 * To be able to use copy.c, we need a Relation descriptor.  As
-		 * there's no relation corresponding to the data loaded from
-		 * workers, fake one.  We just need the bare minimal set of fields
-		 * accessed by BeginCopyFrom().
-		 *
-		 * FIXME: should be abstracted into a separate function.
-		 */
-		fakeRel = palloc0(sizeof(RelationData));
-		fakeRel->rd_att = tupleDescriptor;
-		fakeRel->rd_rel = palloc0(sizeof(FormData_pg_class));
-		fakeRel->rd_rel->relkind = RELKIND_RELATION;
-
-		columnCount = tupleDescriptor->natts;
-		columnValues = palloc0(columnCount * sizeof(Datum));
-		columnNulls = palloc0(columnCount * sizeof(bool));
-
-		Assert(scanState->tuplestorestate == NULL);
-		scanState->tuplestorestate = tuplestore_begin_heap(true, false, work_mem);
-
-		foreach(workerTaskCell, workerTaskList)
-		{
-			Task *workerTask = (Task *) lfirst(workerTaskCell);
-			StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
-			StringInfo taskFilename =
-				TaskFilename(jobDirectoryName, workerTask->taskId);
-			List *copyOptions = NIL;
-			CopyState copyState = NULL;
-
-			if (BinaryMasterCopyFormat)
-			{
-				DefElem *copyOption = makeDefElem("format",
-												  (Node *) makeString("binary"));
-				copyOptions = lappend(copyOptions, copyOption);
-			}
-			copyState = BeginCopyFrom(fakeRel, taskFilename->data, false, NULL,
-									  copyOptions);
-
-			while (true)
-			{
-				MemoryContext oldContext = NULL;
-				bool nextRowFound = false;
-
-				ResetPerTupleExprContext(executorState);
-				oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-				nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-											columnValues, columnNulls, NULL);
-				if (!nextRowFound)
-				{
-					MemoryContextSwitchTo(oldContext);
-					break;
-				}
-
-				tuplestore_putvalues(scanState->tuplestorestate,
-									 tupleDescriptor,
-									 columnValues, columnNulls);
-				MemoryContextSwitchTo(oldContext);
-			}
-		}
+		LoadTuplesIntoTupleStore(scanState, workerTaskList);
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -235,6 +157,92 @@ CitusExecScan(CustomScanState *node)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * Load data collected by real-tiem or task-tracker executors into the tuplestore
+ * of CitusScanState. For that first create a tuplestore, and then copy the
+ * files one-by-one.
+ *
+ * Note that long term it'd be a lot better if Multi*Execute() directly filled
+ * the tuplestores, but that's a fair bit of work.
+ */
+static void
+LoadTuplesIntoTupleStore(CitusScanState *scanState, List *workerTaskList)
+{
+	CustomScanState customScanState = scanState->customScanState;
+	EState *executorState = NULL;
+	MemoryContext executorTupleContext = NULL;
+	ExprContext *executorExpressionContext = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	Relation fakeRelation = NULL;
+	ListCell *workerTaskCell = NULL;
+	uint32 columnCount = 0;
+	Datum *columnValues = NULL;
+	bool *columnNulls = NULL;
+
+	executorState = scanState->customScanState.ss.ps.state;
+	executorTupleContext = GetPerTupleMemoryContext(executorState);
+	executorExpressionContext = GetPerTupleExprContext(executorState);
+
+	tupleDescriptor = customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+
+	/*
+	 * To be able to use copy.c, we need a Relation descriptor. As there's
+	 * no relation corresponding to the data loaded from workers, fake one.
+	 * We just need the bare minimal set of fields accessed by BeginCopyFrom().
+	 */
+	fakeRelation = palloc0(sizeof(RelationData));
+	fakeRelation->rd_att = tupleDescriptor;
+	fakeRelation->rd_rel = palloc0(sizeof(FormData_pg_class));
+	fakeRelation->rd_rel->relkind = RELKIND_RELATION;
+
+	columnCount = tupleDescriptor->natts;
+	columnValues = palloc0(columnCount * sizeof(Datum));
+	columnNulls = palloc0(columnCount * sizeof(bool));
+
+	Assert(scanState->tuplestorestate == NULL);
+	scanState->tuplestorestate = tuplestore_begin_heap(true, false, work_mem);
+
+	foreach(workerTaskCell, workerTaskList)
+	{
+		Task *workerTask = (Task *) lfirst(workerTaskCell);
+		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
+		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
+		List *copyOptions = NIL;
+		CopyState copyState = NULL;
+
+		if (BinaryMasterCopyFormat)
+		{
+			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
+			copyOptions = lappend(copyOptions, copyOption);
+		}
+
+		copyState = BeginCopyFrom(fakeRelation, taskFilename->data, false, NULL,
+								  copyOptions);
+
+		while (true)
+		{
+			MemoryContext oldContext = NULL;
+			bool nextRowFound = false;
+
+			ResetPerTupleExprContext(executorState);
+			oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										columnValues, columnNulls, NULL);
+			if (!nextRowFound)
+			{
+				MemoryContextSwitchTo(oldContext);
+				break;
+			}
+
+			tuplestore_putvalues(scanState->tuplestorestate, tupleDescriptor,
+								 columnValues, columnNulls);
+			MemoryContextSwitchTo(oldContext);
+		}
+	}
 }
 
 
